@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-DocPortal Desktop — 文件夹知识导出图形界面工具 | Bilingual GUI (中文/English)
-提供一键生成 HTML 的桌面应用，支持拖入文件夹、文件管理、内容预览等功能。
+DocPortal Desktop — Knowledge Portal Generator
 """
 
 import os
@@ -12,897 +11,728 @@ import logging
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-# Add project root to path
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-# Try to import portal generator
 try:
     from src.generator.portal import generate_portal
     HAS_PORTAL = True
 except ImportError:
     HAS_PORTAL = False
 
-# Import business logic from gui_scanner
-from src.gui_scanner import (
-    collect_files_info,
-    build_html_from_files,
-    human_readable_size,
-    _,
-)
+from src.gui_scanner import collect_files_info, build_html_from_files, human_readable_size, _
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-# ============================================================
-#  Modern GUI using tkinter with ttk — bilingual UI
-# ============================================================
-
 class DocPortalUI:
-    """Main GUI Application for DocPortal — bilingual (中文/English)."""
+
+    CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".docportal_settings.json")
 
     COLORS = {
-        'bg': '#f0f2f5',
-        'card': '#ffffff',
-        'primary': '#1a73e8',
-        'primary_hover': '#1557b0',
-        'success': '#34a853',
-        'warning': '#fbbc04',
-        'error': '#ea4335',
-        'text': '#202124',
-        'text_secondary': '#5f6368',
-        'border': '#dadce0',
-        'drop_bg': '#e8f0fe',
+        'bg': '#f0f2f5', 'card': '#ffffff', 'primary': '#1a73e8',
+        'primary_hover': '#1557b0', 'success': '#34a853', 'warning': '#fbbc04',
+        'error': '#ea4335', 'text': '#202124', 'text_secondary': '#5f6368',
+        'border': '#dadce0', 'drop_bg': '#e8f0fe', 'drop_bg_hover': '#d2e3fc',
+    }
+
+    L = {
+        'en': {
+            'title': 'DocPortal',
+            'subtitle': 'Folder \u2192 Knowledge Portal',
+            'drop': 'Click or drop a folder here',
+            'hint': 'Ctrl+O Browse  |  Ctrl+G Generate',
+            'browse': 'Browse',
+            'paste_btn': 'Paste',
+            'paste_done': 'Folder pasted from clipboard',
+            'clip_empty': 'Clipboard empty or not a folder path',
+            'scanning': 'Scanning...',
+            'no_folder': 'No folder selected',
+            'empty': 'Empty folder or no readable files',
+            'file_list': 'Files',
+            'mode_label': 'Mode:',
+            'single': 'Single HTML',
+            'portal_mode': 'Portal',
+            'ready': 'Ready',
+            'unavail': 'Unavailable',
+            'output': 'Output:',
+            'max_chars': 'Max chars:',
+            'unlimited': '(blank=unlimited)',
+            'fname': 'Name:',
+            'show_skip': 'Show unsupported',
+            'out_dir': 'Output dir:',
+            'chars_page': 'Chars/page:',
+            'rec_8000': '(recommended 8000)',
+            'gen_btn': 'Generate HTML',
+            'gen_portal_btn': 'Generate Portal',
+            'start_hint': 'Select a folder to start',
+            'status_ready': 'Ready',
+            'files': 'files',
+            'supported': 'supported',
+            'parseable': 'parseable',
+            'gen_done': 'Generated!',
+            'portal_done': 'Portal generated!',
+            'open_folder': 'Open output folder?',
+        },
+        'zh': {
+            'title': 'DocPortal',
+            'subtitle': '文件夹 \u2192 知识门户',
+            'drop': '点击选择或将文件夹拖入此处',
+            'hint': 'Ctrl+O 浏览  |  Ctrl+G 生成',
+            'browse': '浏览',
+            'paste_btn': '粘贴',
+            'paste_done': '已从剪贴板粘贴路径',
+            'clip_empty': '剪贴板为空或非文件夹路径',
+            'scanning': '正在扫描...',
+            'no_folder': '未选择文件夹',
+            'empty': '文件夹为空或没有可读文件',
+            'file_list': '文件列表',
+            'mode_label': '模式：',
+            'single': '单文件',
+            'portal_mode': '门户',
+            'ready': '就绪',
+            'unavail': '不可用',
+            'output': '输出：',
+            'max_chars': '最大字符：',
+            'unlimited': '(留空=不限)',
+            'fname': '文件名：',
+            'show_skip': '显示不支持标记',
+            'out_dir': '输出目录：',
+            'chars_page': '每页字符：',
+            'rec_8000': '(推荐8000)',
+            'gen_btn': '生成 HTML',
+            'gen_portal_btn': '生成门户',
+            'start_hint': '请选择文件夹开始',
+            'status_ready': '就绪',
+            'files': '个文件',
+            'supported': '个支持',
+            'parseable': '个可解析',
+            'gen_done': '生成成功！',
+            'portal_done': '门户生成成功！',
+            'open_folder': '打开输出文件夹？',
+        }
     }
 
     def __init__(self, root):
         self.root = root
-        self.root.title(_("DocPortal Desktop 🚀", "DocPortal Desktop 🚀"))
-        self.root.geometry("820x680")
-        self.root.minsize(700, 600)
-
-        # Set icon if possible
-        try:
-            self.root.iconbitmap(default='')
-        except Exception:
-            pass
-
-        # Configure style
-        self.setup_styles()
-
-        # State
+        self._lang = 'en'
         self.current_folder = None
         self.file_list = []
         self.total_size = 0
         self.generating = False
         self.output_path = os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_export.html")
 
-        # Build UI
-        self.build_ui()
+        self._load_settings()
 
-        # Center window
+        self.root.title("DocPortal")
+        self.root.geometry("820x680")
+        self.root.minsize(700, 600)
+        self.setup_styles()
+        self.build_all()
         self.center_window()
+        self.bind_shortcuts()
 
-        # Bind keyboard shortcuts
-        self.root.bind('<Control-o>', lambda e: self.browse_folder())
-        self.root.bind('<Control-g>', lambda e: self.generate_html())
-        self.root.bind('<Control-s>', lambda e: self.browse_output_or_portal())
-        self.root.bind('<Control-p>', lambda e: self.mode_var.set('portal') or self.on_mode_change())
-        self.root.bind('<Control-h>', lambda e: self.mode_var.set('single') or self.on_mode_change())
-        self.root.bind('<Escape>', lambda e: self.root.quit() if not self.generating else None)
+    def tr(self, key):
+        return self.L[self._lang][key]
+
+    def set_lang(self, lang):
+        if lang != self._lang:
+            self._lang = lang
+            self._save_settings()
+            self.build_all()
+
+    def _save_settings(self):
+        import json
+        try:
+            data = {"language": self._lang}
+            with open(self.CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.warning("Failed to save settings: %s", e)
+
+    def _load_settings(self):
+        import json
+        try:
+            if os.path.exists(self.CONFIG_FILE):
+                with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                lang = data.get("language", "en")
+                if lang in self.L:
+                    self._lang = lang
+        except Exception as e:
+            logger.warning("Failed to load settings: %s", e)
 
     def setup_styles(self):
-        """Configure ttk styles for modern look."""
-        style = ttk.Style()
-        style.theme_use('clam')
-
-        # Configure colors
-        bg = self.COLORS['bg']
-        card = self.COLORS['card']
-        primary = self.COLORS['primary']
-        text = self.COLORS['text']
-
-        style.configure('TFrame', background=bg)
-        style.configure('TLabel', background=bg, foreground=text, font=('Segoe UI', 10))
+        style = ttk.Style(); style.theme_use('clam')
+        c = self.COLORS
+        style.configure('TFrame', background=c['bg'])
+        style.configure('TLabel', background=c['bg'], foreground=c['text'], font=('Segoe UI', 10))
         style.configure('TButton', font=('Segoe UI', 10), padding=(12, 6))
-        style.configure('Card.TFrame', background=card, relief='solid', borderwidth=1)
-        style.configure('Title.TLabel', font=('Segoe UI', 16, 'bold'), foreground=primary)
-        style.configure('Subtitle.TLabel', font=('Segoe UI', 10), foreground=self.COLORS['text_secondary'])
-        style.configure('Stats.TLabel', font=('Segoe UI', 11), foreground=text)
-        style.configure('Heading.TLabel', font=('Segoe UI', 11, 'bold'), foreground=text)
-        style.configure('Status.TLabel', font=('Segoe UI', 9), foreground=self.COLORS['text_secondary'])
-
-        # Treeview style
+        style.configure('Title.TLabel', font=('Segoe UI', 16, 'bold'), foreground=c['primary'])
+        style.configure('Subtitle.TLabel', font=('Segoe UI', 10), foreground=c['text_secondary'])
+        style.configure('Heading.TLabel', font=('Segoe UI', 11, 'bold'), foreground=c['text'])
         style.configure('Treeview', font=('Segoe UI', 9), rowheight=26)
         style.configure('Treeview.Heading', font=('Segoe UI', 9, 'bold'))
-        style.map('Treeview', background=[('selected', primary)])
+        style.map('Treeview', background=[('selected', c['primary'])])
+        style.configure('TProgressbar', thickness=10, background=c['primary'])
 
-        # Horizontal TProgressbar
-        style.configure('TProgressbar', thickness=10, background=primary)
+    def build_all(self):
+        for w in self.root.winfo_children():
+            w.destroy()
 
-    # ── Bilingual helper ──
-    def __(self, zh: str, en: str) -> str:
-        return _(zh, en)
+        self.main = ttk.Frame(self.root, padding="10")
+        self.main.pack(fill=tk.BOTH, expand=True)
 
-    def build_ui(self):
-        """Build the complete UI with bilingual labels."""
-        main_frame = ttk.Frame(self.root, padding="16")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        # ── Header bar ──
+        hdr = tk.Frame(self.main, bg=self.COLORS['bg'])
+        hdr.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(hdr, text=self.tr('title'), style='Title.TLabel').pack(side=tk.LEFT)
+        ttk.Label(hdr, text=self.tr('subtitle'), style='Subtitle.TLabel').pack(side=tk.LEFT, padx=(8, 0))
 
-        # ── Header ──
-        header_frame = ttk.Frame(main_frame)
-        header_frame.pack(fill=tk.X, pady=(0, 12))
+        # Language toggle
+        lang_f = tk.Frame(hdr, bg=self.COLORS['bg'])
+        lang_f.pack(side=tk.RIGHT)
+        for lcode, ltxt in [('en', 'EN'), ('zh', '中文')]:
+            bg = self.COLORS['primary'] if self._lang == lcode else '#ccc'
+            fg = 'white' if self._lang == lcode else '#333'
+            btn = tk.Button(lang_f, text=ltxt, font=('Segoe UI', 9, 'bold'),
+                            bg=bg, fg=fg, relief='flat', padx=8, pady=2,
+                            cursor='hand2', command=lambda c=lcode: self.set_lang(c))
+            btn.pack(side=tk.LEFT, padx=1)
 
-        ttk.Label(header_frame, text=_("DocPortal Desktop", "DocPortal Desktop"), style='Title.TLabel').pack(side=tk.LEFT)
-        ttk.Label(header_frame, text=_("📁 → 📄 文件夹转知识HTML", "📁 → 📄 Folder to Knowledge HTML"), style='Subtitle.TLabel').pack(side=tk.LEFT, padx=(10, 0))
+        # ── Folder row: entry + browse + paste ──
+        self.build_folder_row()
 
-        # ── Drop Zone / Folder Selection ──
-        self.build_folder_selector(main_frame)
+        # ── File list ──
+        self.build_file_list()
 
-        # ── Stats Bar ──
-        self.stats_frame = ttk.Frame(main_frame)
-        self.stats_frame.pack(fill=tk.X, pady=(0, 8))
-        self.stats_label = ttk.Label(self.stats_frame, text=_("未选择文件夹", "No folder selected"), style='Subtitle.TLabel')
-        self.stats_label.pack(side=tk.LEFT)
+        # ── Settings panel ──
+        self.build_settings()
 
-        # ── File List (Treeview) ──
-        self.build_file_list(main_frame)
+        # ── Generate button + status ──
+        self.build_gen_section()
 
-        # ── Output Settings ──
-        self.build_settings(main_frame)
+    def build_folder_row(self):
+        folder_f = tk.Frame(self.main, bg=self.COLORS['card'],
+                            highlightbackground=self.COLORS['primary'],
+                            highlightthickness=2, padx=10, pady=8, cursor='hand2')
+        folder_f.pack(fill=tk.X, pady=(0, 6))
+        self.folder_drop_frame = folder_f
 
-        # ── Generate Button ──
-        self.build_generate_section(main_frame)
-
-    def build_folder_selector(self, parent):
-        """Build drag-drop zone and folder selection with bilingual text."""
-        drop_frame = tk.Frame(
-            parent,
-            bg=self.COLORS['drop_bg'],
-            highlightbackground=self.COLORS['primary'],
-            highlightthickness=2,
-            highlightcolor=self.COLORS['primary'],
-            cursor='hand2',
-            height=90,
-        )
-        drop_frame.pack(fill=tk.X, pady=(0, 8))
-        drop_frame.pack_propagate(False)
-
-        # Bind click events
-        drop_frame.bind('<Button-1>', lambda e: self.browse_folder())
-        drop_frame.bind('<Enter>', lambda e: drop_frame.configure(bg='#d2e3fc'))
-        drop_frame.bind('<Leave>', lambda e: drop_frame.configure(bg=self.COLORS['drop_bg']))
-
-        # Drop zone content — bilingual
-        drop_text = _(
-            "📂 点击浏览选择文件夹  或  直接拖入文件夹到这里",
-            "📂 Click to browse a folder   or   drag & drop a folder here"
-        )
-        self.drop_label = tk.Label(
-            drop_frame,
-            text=drop_text,
-            font=('Segoe UI', 13, 'bold'),
-            bg=self.COLORS['drop_bg'],
-            fg=self.COLORS['primary'],
-            cursor='hand2',
-        )
-        self.drop_label.pack(expand=True)
-        self.drop_label.bind('<Button-1>', lambda e: self.browse_folder())
-
-        # Sub-label with keyboard shortcuts
-        hint_text = _("快捷键: Ctrl+O 浏览 | Ctrl+G 生成", "Shortcuts: Ctrl+O Browse | Ctrl+G Generate")
-        hint_label = tk.Label(
-            drop_frame,
-            text=hint_text,
-            font=('Segoe UI', 8),
-            bg=self.COLORS['drop_bg'],
-            fg=self.COLORS['text_secondary'],
-        )
-        hint_label.pack(side=tk.BOTTOM, pady=(0, 4))
-
-        # Try to register DnD if tkinterdnd2 is available
+        # Register drop target on root (TkinterDnD2)
         try:
             from tkinterdnd2 import DND_FILES
-            drop_frame.dnd_bind('<<Drop>>', lambda e: self.handle_dnd(e))
-        except ImportError:
-            # No need to change label, just pass
-            pass
+            self.root.drop_target_register(DND_FILES)
+            self.root.dnd_bind('<<Drop>>', self._on_drop)
+        except Exception as e:
+            print("TkinterDnD not available:", e)
 
-        # Browse button
-        browse_btn = tk.Button(
-            drop_frame,
-            text=_("浏览文件夹...", "Browse Folder..."),
-            font=('Segoe UI', 10),
-            bg=self.COLORS['primary'],
-            fg='white',
-            relief='flat',
-            cursor='hand2',
-            command=self.browse_folder,
-            padx=16,
-            pady=4,
-        )
-        browse_btn.place(relx=1.0, rely=1.0, anchor='se', x=-12, y=-8)
-        browse_btn.bind('<Enter>', lambda e: browse_btn.configure(bg=self.COLORS['primary_hover']))
-        browse_btn.bind('<Leave>', lambda e: browse_btn.configure(bg=self.COLORS['primary']))
+        # Visual feedback on hover
+        folder_f.bind('<Enter>', lambda e: folder_f.configure(bg=self.COLORS['drop_bg_hover']))
+        folder_f.bind('<Leave>', lambda e: folder_f.configure(bg=self.COLORS['card']))
+        # Click to browse
+        folder_f.bind('<Button-1>', lambda e: self.browse_folder())
 
-    def handle_dnd(self, event):
-        """Handle drag and drop event from tkinterdnd2."""
+        tk.Label(folder_f, text=self.tr('drop'), font=('Segoe UI', 11, 'bold'),
+                 bg=self.COLORS['card'], fg=self.COLORS['primary'], cursor='hand2').pack()
+
+        tk.Label(folder_f, text=self.tr('hint'), font=('Segoe UI', 8),
+                 bg=self.COLORS['card'], fg=self.COLORS['text_secondary']).pack(pady=(2, 6))
+
+        row = tk.Frame(folder_f, bg=self.COLORS['card'])
+        row.pack(fill=tk.X)
+
+        self.path_var = tk.StringVar()
+        path_entry = ttk.Entry(row, textvariable=self.path_var, font=('Segoe UI', 10))
+        path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+        path_entry.bind('<Return>', lambda e: self.load_from_path())
+
+        def make_btn(text, command, bg_color):
+            btn = tk.Button(row, text=text, font=('Segoe UI', 10),
+                            bg=bg_color, fg='white', relief='flat',
+                            cursor='hand2', command=command, padx=14, pady=3)
+            btn._normal_bg = bg_color
+            btn._hover_bg = '#1557b0' if text != 'Clear' else '#d32f2f'
+            btn.pack(side=tk.LEFT, padx=2)
+            btn.bind('<Enter>', lambda e, b=btn: b.configure(bg=b._hover_bg))
+            btn.bind('<Leave>', lambda e, b=btn: b.configure(bg=b._normal_bg))
+            return btn
+
+        make_btn(self.tr('browse'), self.browse_folder, self.COLORS['primary'])
+        make_btn(self.tr('paste_btn'), self.paste_folder, self.COLORS['primary'])
+        make_btn('Clear', self.clear_folder, self.COLORS['error'])
+
+    def _on_drop(self, event):
         files = event.data
         if files:
-            path = files.strip('{}')
+            path = files.strip('{}').strip('"')
             if os.path.isdir(path):
+                self.path_var.set(path)
                 self.load_folder(path)
             else:
                 folder = os.path.dirname(path)
                 if os.path.isdir(folder):
+                    self.path_var.set(folder)
                     self.load_folder(folder)
 
-    def build_file_list(self, parent):
-        """Build the file list treeview with bilingual headers."""
-        list_container = ttk.Frame(parent)
-        list_container.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+    def build_file_list(self):
+        flist_f = ttk.Frame(self.main)
+        flist_f.pack(fill=tk.BOTH, expand=True, pady=(0, 6))
 
-        ttk.Label(list_container, text=_("📋 文件列表", "📋 File List"), style='Heading.TLabel').pack(anchor=tk.W, pady=(0, 4))
+        hdr_f = ttk.Frame(flist_f)
+        hdr_f.pack(fill=tk.X, pady=(0, 3))
+        ttk.Label(hdr_f, text=self.tr('file_list'), style='Heading.TLabel').pack(side=tk.LEFT)
+        self.stats_lbl = ttk.Label(hdr_f, text=self.tr('no_folder'),
+                                   style='Subtitle.TLabel')
+        self.stats_lbl.pack(side=tk.RIGHT)
 
-        tree_frame = ttk.Frame(list_container)
-        tree_frame.pack(fill=tk.BOTH, expand=True)
+        tree_f = ttk.Frame(flist_f)
+        tree_f.pack(fill=tk.BOTH, expand=True)
 
-        v_scroll = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL)
-        h_scroll = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL)
+        vs = ttk.Scrollbar(tree_f, orient=tk.VERTICAL)
+        hs = ttk.Scrollbar(tree_f, orient=tk.HORIZONTAL)
 
-        self.tree = ttk.Treeview(
-            tree_frame,
-            columns=('name', 'size', 'chars', 'status'),
-            show='tree headings',
-            yscrollcommand=v_scroll.set,
-            xscrollcommand=h_scroll.set,
-            height=8,
-        )
+        self.tree = ttk.Treeview(tree_f, columns=('name','size','chars','status'),
+                                 show='tree headings',
+                                 yscrollcommand=vs.set, xscrollcommand=hs.set, height=6)
+        vs.config(command=self.tree.yview)
+        hs.config(command=self.tree.xview)
 
-        v_scroll.config(command=self.tree.yview)
-        h_scroll.config(command=self.tree.xview)
-
-        self.tree.column('#0', width=30, minwidth=30, stretch=False)
-        self.tree.heading('#0', text='')
-        self.tree.column('name', width=300, minwidth=150)
-        self.tree.heading('name', text=_('文件名', 'Name'), anchor=tk.W)
-        self.tree.column('size', width=100, minwidth=80, anchor=tk.E)
-        self.tree.heading('size', text=_('大小', 'Size'), anchor=tk.E)
-        self.tree.column('chars', width=100, minwidth=80, anchor=tk.E)
-        self.tree.heading('chars', text=_('内容字符', 'Chars'), anchor=tk.E)
-        self.tree.column('status', width=100, minwidth=60, anchor=tk.CENTER)
-        self.tree.heading('status', text=_('状态', 'Status'), anchor=tk.CENTER)
+        self.tree.column('#0', width=0, stretch=False)
+        self.tree.column('name', width=350, minwidth=150)
+        self.tree.column('size', width=80, minwidth=60, anchor=tk.E)
+        self.tree.column('chars', width=60, minwidth=50, anchor=tk.E)
+        self.tree.column('status', width=70, minwidth=60, anchor=tk.CENTER)
+        for col, txt in [('name','Name'),('size','Size'),('chars','Chars'),('status','Status')]:
+            self.tree.heading(col, text=txt, anchor=tk.W if col=='name' else tk.CENTER)
 
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+        vs.pack(side=tk.RIGHT, fill=tk.Y)
+        hs.pack(side=tk.BOTTOM, fill=tk.X)
 
-        self.tree.tag_configure('supported', foreground=self.COLORS['text'])
-        self.tree.tag_configure('unsupported', foreground=self.COLORS['text_secondary'])
-        self.tree.tag_configure('error', foreground=self.COLORS['error'])
+        self.tree.tag_configure('ok', foreground=self.COLORS['text'])
+        self.tree.tag_configure('skip', foreground=self.COLORS['text_secondary'])
+        self.tree.tag_configure('even', background='#fafafa')
+        self.tree.tag_configure('odd', background='#ffffff')
 
-    def build_settings(self, parent):
-        """Build output settings area with bilingual labels."""
-        settings_frame = ttk.Frame(parent)
-        settings_frame.pack(fill=tk.X, pady=(0, 8))
+    def build_settings(self):
+        self.set_f = tk.Frame(self.main, bg=self.COLORS['card'],
+                              highlightbackground=self.COLORS['border'],
+                              highlightthickness=1, padx=10, pady=8)
+        self.set_f.pack(fill=tk.X, pady=(0, 6))
 
-        ttk.Label(settings_frame, text=_("⚙️ 输出设置", "⚙️ Output Settings"), style='Heading.TLabel').grid(
-            row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 6)
-        )
-        settings_frame.columnconfigure(1, weight=1)
+        # Mode row
+        mode_f = tk.Frame(self.set_f, bg=self.COLORS['card'])
+        mode_f.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(mode_f, text=self.tr('mode_label'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
 
-        # ── Mode Selection ──
-        mode_frame = ttk.Frame(settings_frame)
-        mode_frame.grid(row=1, column=0, columnspan=3, sticky=tk.EW, pady=(0, 4))
-        self.mode_var = tk.StringVar(value="single")
-        ttk.Label(mode_frame, text=_("输出模式：", "Mode:"), style='Subtitle.TLabel').pack(side=tk.LEFT)
-        ttk.Radiobutton(
-            mode_frame, text=_("📄 单文件 HTML", "📄 Single HTML"), variable=self.mode_var,
-            value="single", command=self.on_mode_change
-        ).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Radiobutton(
-            mode_frame, text=_("🏛️ 知识门户（可搜索）", "🏛️ Portal (Searchable)"), variable=self.mode_var,
-            value="portal", command=self.on_mode_change
-        ).pack(side=tk.LEFT, padx=(8, 0))
-        portal_status = _("✅ 可用", "✅ Ready") if HAS_PORTAL else _("⚠️ 模块未加载", "⚠️ Unavailable")
-        ttk.Label(mode_frame, text=f"({portal_status})", style='Subtitle.TLabel').pack(side=tk.LEFT, padx=(6, 0))
+        self.mode_var = tk.StringVar(value='single')
 
-        # Container for "single" mode settings
-        self.single_settings = ttk.Frame(settings_frame)
-        self.single_settings.grid(row=2, column=0, columnspan=3, sticky=tk.EW)
+        for val, txt in [('single', self.tr('single')), ('portal', self.tr('portal_mode'))]:
+            rb = tk.Radiobutton(mode_f, text=txt, variable=self.mode_var, value=val,
+                                command=self.on_mode_change, font=('Segoe UI', 10),
+                                bg=self.COLORS['card'], selectcolor=self.COLORS['card'])
+            rb.pack(side=tk.LEFT, padx=(8, 0))
 
-        # Output path (single mode)
-        ttk.Label(self.single_settings, text=_("输出路径：", "Output:")).grid(
-            row=0, column=0, sticky=tk.W, padx=(0, 8), pady=2
-        )
-        self.output_var = tk.StringVar(value=self.output_path)
-        output_entry = ttk.Entry(self.single_settings, textvariable=self.output_var, font=('Segoe UI', 9))
-        output_entry.grid(row=0, column=1, sticky=tk.EW, pady=2)
-        output_btn = tk.Button(
-            self.single_settings,
-            text=_("选择...", "Browse..."),
-            font=('Segoe UI', 9),
-            bg=self.COLORS['primary'],
-            fg='white',
-            relief='flat',
-            cursor='hand2',
-            command=self.browse_output,
-            padx=10,
-        )
-        output_btn.grid(row=0, column=2, padx=(6, 0), pady=2)
-        output_btn.bind('<Enter>', lambda e: output_btn.configure(bg=self.COLORS['primary_hover']))
-        output_btn.bind('<Leave>', lambda e: output_btn.configure(bg=self.COLORS['primary']))
+        ps = self.tr('ready') if HAS_PORTAL else self.tr('unavail')
+        pc = self.COLORS['success'] if HAS_PORTAL else self.COLORS['warning']
+        tk.Label(mode_f, text=f"({ps})", font=('Segoe UI', 9),
+                 bg=self.COLORS['card'], fg=pc).pack(side=tk.LEFT, padx=(6, 0))
 
-        # Max chars (single mode)
-        ttk.Label(self.single_settings, text=_("最大字符数：", "Max chars:")).grid(
-            row=1, column=0, sticky=tk.W, padx=(0, 8), pady=2
-        )
-        self.max_chars_var = tk.StringVar(value="50000")
-        max_chars_frame = ttk.Frame(self.single_settings)
-        max_chars_frame.grid(row=1, column=1, sticky=tk.EW, pady=2)
-        max_chars_entry = ttk.Entry(max_chars_frame, textvariable=self.max_chars_var, width=15)
-        max_chars_entry.pack(side=tk.LEFT)
-        ttk.Label(max_chars_frame, text=_("  (留空=不限)", "  (blank=unlimited)"), style='Subtitle.TLabel').pack(side=tk.LEFT, padx=(6, 0))
+        sep = tk.Frame(self.set_f, bg=self.COLORS['border'], height=1)
+        sep.pack(fill=tk.X, pady=(4, 6))
 
-        # HTML file name (single mode)
-        ttk.Label(self.single_settings, text=_("HTML 文件名：", "Filename:")).grid(
-            row=2, column=0, sticky=tk.W, padx=(0, 8), pady=2
-        )
-        name_frame = ttk.Frame(self.single_settings)
-        name_frame.grid(row=2, column=1, sticky=tk.EW, pady=2)
-        self.filename_var = tk.StringVar(value="knowledge_export")
-        name_entry = ttk.Entry(name_frame, textvariable=self.filename_var, width=25)
-        name_entry.pack(side=tk.LEFT)
-        ttk.Label(name_frame, text=".html", style='Subtitle.TLabel').pack(side=tk.LEFT, padx=(2, 0))
+        # Single-mode settings
+        self.single_f = tk.Frame(self.set_f, bg=self.COLORS['card'])
+        self.single_f.pack(fill=tk.X)
 
-        self.filename_var.trace_add('write', lambda *a: self.update_output_path())
+        r1 = tk.Frame(self.single_f, bg=self.COLORS['card'])
+        r1.pack(fill=tk.X, pady=1)
+        tk.Label(r1, text=self.tr('output'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
+        self.out_var = tk.StringVar(value=self.output_path)
+        ttk.Entry(r1, textvariable=self.out_var, font=('Segoe UI', 9)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 4))
+        out_btn = tk.Button(r1, text=self.tr('browse'), font=('Segoe UI', 9),
+                            bg=self.COLORS['primary'], fg='white', relief='flat',
+                            cursor='hand2', command=self.browse_output, padx=10)
+        out_btn.pack(side=tk.LEFT)
+        out_btn.bind('<Enter>', lambda e: out_btn.configure(bg=self.COLORS['primary_hover']))
+        out_btn.bind('<Leave>', lambda e: out_btn.configure(bg=self.COLORS['primary']))
 
-        # Container for "portal" mode settings
-        self.portal_settings = ttk.Frame(settings_frame)
-        self.portal_settings.grid(row=3, column=0, columnspan=3, sticky=tk.EW)
-        self.portal_settings.grid_remove()
+        r2 = tk.Frame(self.single_f, bg=self.COLORS['card'])
+        r2.pack(fill=tk.X, pady=1)
+        tk.Label(r2, text=self.tr('max_chars'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
+        self.max_ch_var = tk.StringVar(value='50000')
+        ttk.Entry(r2, textvariable=self.max_ch_var, width=10).pack(side=tk.LEFT, padx=(4, 4))
+        tk.Label(r2, text=self.tr('unlimited'), font=('Segoe UI', 9),
+                 bg=self.COLORS['card'], fg=self.COLORS['text_secondary']).pack(side=tk.LEFT)
 
-        # Portal output dir
-        ttk.Label(self.portal_settings, text=_("输出目录：", "Output dir:")).grid(
-            row=0, column=0, sticky=tk.W, padx=(0, 8), pady=2
-        )
-        self.portal_output_var = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_portal"))
-        portal_output_entry = ttk.Entry(self.portal_settings, textvariable=self.portal_output_var, font=('Segoe UI', 9))
-        portal_output_entry.grid(row=0, column=1, sticky=tk.EW, pady=2)
-        portal_output_btn = tk.Button(
-            self.portal_settings,
-            text=_("选择...", "Browse..."),
-            font=('Segoe UI', 9),
-            bg=self.COLORS['primary'],
-            fg='white',
-            relief='flat',
-            cursor='hand2',
-            command=self.browse_portal_output,
-            padx=10,
-        )
-        portal_output_btn.grid(row=0, column=2, padx=(6, 0), pady=2)
-        portal_output_btn.bind('<Enter>', lambda e: portal_output_btn.configure(bg=self.COLORS['primary_hover']))
-        portal_output_btn.bind('<Leave>', lambda e: portal_output_btn.configure(bg=self.COLORS['primary']))
+        tk.Frame(r2, bg=self.COLORS['border'], width=1).pack(side=tk.LEFT, padx=(10, 10), fill=tk.Y)
 
-        # Portal: chars per page
-        ttk.Label(self.portal_settings, text=_("每页字符数：", "Chars/page:")).grid(
-            row=1, column=0, sticky=tk.W, padx=(0, 8), pady=2
-        )
-        self.per_page_var = tk.StringVar(value="8000")
-        per_page_frame = ttk.Frame(self.portal_settings)
-        per_page_frame.grid(row=1, column=1, sticky=tk.EW, pady=2)
-        per_page_entry = ttk.Entry(per_page_frame, textvariable=self.per_page_var, width=15)
-        per_page_entry.pack(side=tk.LEFT)
-        ttk.Label(per_page_frame, text=_("  (推荐8000)", "  (recommended 8000)"), style='Subtitle.TLabel').pack(side=tk.LEFT, padx=(6, 0))
+        tk.Label(r2, text=self.tr('fname'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
+        self.fname_var = tk.StringVar(value='knowledge_export')
+        ttk.Entry(r2, textvariable=self.fname_var, width=16).pack(side=tk.LEFT, padx=(4, 2))
+        tk.Label(r2, text='.html', font=('Segoe UI', 10, 'bold'),
+                 bg=self.COLORS['card'], fg=self.COLORS['primary']).pack(side=tk.LEFT)
+        self.fname_var.trace_add('write', lambda *a: self.update_out_path())
 
-        # Include skipped files checkbox (shared)
-        self.include_skipped_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            self.single_settings,
-            text=_("包含不支持的文件标记", "Show unsupported file markers"),
-            variable=self.include_skipped_var,
-        ).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=2)
-        ttk.Checkbutton(
-            self.portal_settings,
-            text=_("包含不支持的文件标记", "Show unsupported file markers"),
-            variable=self.include_skipped_var,
-        ).grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=2)
+        self.skip_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(self.single_f, text=self.tr('show_skip'),
+                       variable=self.skip_var, font=('Segoe UI', 10),
+                       bg=self.COLORS['card'], selectcolor=self.COLORS['card']).pack(anchor=tk.W, pady=(2, 0))
 
-    def build_generate_section(self, parent):
-        """Build generate button and status area with bilingual text."""
-        gen_frame = ttk.Frame(parent)
-        gen_frame.pack(fill=tk.X, pady=(0, 0))
+        # Portal settings (hidden by default)
+        self.portal_f = tk.Frame(self.set_f, bg=self.COLORS['card'])
+        pr1 = tk.Frame(self.portal_f, bg=self.COLORS['card'])
+        pr1.pack(fill=tk.X, pady=1)
+        tk.Label(pr1, text=self.tr('out_dir'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
+        self.pout_var = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_portal"))
+        ttk.Entry(pr1, textvariable=self.pout_var, font=('Segoe UI', 9)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 4))
+        pout_btn = tk.Button(pr1, text=self.tr('browse'), font=('Segoe UI', 9),
+                             bg=self.COLORS['primary'], fg='white', relief='flat',
+                             cursor='hand2', command=self.browse_portal_out, padx=10)
+        pout_btn.pack(side=tk.LEFT)
+        pout_btn.bind('<Enter>', lambda e: pout_btn.configure(bg=self.COLORS['primary_hover']))
+        pout_btn.bind('<Leave>', lambda e: pout_btn.configure(bg=self.COLORS['primary']))
 
-        button_frame = tk.Frame(gen_frame, bg=self.COLORS['bg'])
-        button_frame.pack(fill=tk.X, pady=(4, 6))
+        pr2 = tk.Frame(self.portal_f, bg=self.COLORS['card'])
+        pr2.pack(fill=tk.X, pady=1)
+        tk.Label(pr2, text=self.tr('chars_page'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
+        self.perpage_var = tk.StringVar(value='8000')
+        ttk.Entry(pr2, textvariable=self.perpage_var, width=10).pack(side=tk.LEFT, padx=(4, 4))
+        tk.Label(pr2, text=self.tr('rec_8000'), font=('Segoe UI', 9),
+                 bg=self.COLORS['card'], fg=self.COLORS['text_secondary']).pack(side=tk.LEFT)
 
-        self.gen_btn = tk.Button(
-            button_frame,
-            text=_("🚀 一键生成 HTML", "🚀 Generate HTML"),
-            font=('Segoe UI', 13, 'bold'),
-            bg=self.COLORS['primary'],
-            fg='white',
-            relief='flat',
-            cursor='hand2',
-            command=self.generate_html,
-            padx=30,
-            pady=8,
-            state='disabled',
-        )
-        self.gen_btn.pack()
-        self.gen_btn.bind('<Enter>', lambda e: self.on_gen_btn_hover(True))
-        self.gen_btn.bind('<Leave>', lambda e: self.on_gen_btn_hover(False))
+        tk.Checkbutton(self.portal_f, text=self.tr('show_skip'),
+                       variable=self.skip_var, font=('Segoe UI', 10),
+                       bg=self.COLORS['card'], selectcolor=self.COLORS['card']).pack(anchor=tk.W, pady=(2, 0))
 
-        self.progress = ttk.Progressbar(
-            button_frame,
-            mode='determinate',
-            length=400,
-        )
-        self.progress.pack(pady=(4, 0))
-        self.progress.pack_forget()
+    def build_gen_section(self):
+        gen_f = tk.Frame(self.main, bg=self.COLORS['bg'])
+        gen_f.pack(fill=tk.X)
+
+        self.gen_btn = tk.Button(gen_f, text=self.tr('gen_btn'),
+                                 font=('Segoe UI', 14, 'bold'),
+                                 bg=self.COLORS['primary'], fg='white', relief='flat',
+                                 cursor='hand2', command=self.generate, padx=40, pady=10,
+                                 state='disabled')
+        self.gen_btn.pack(pady=(0, 4))
+        self.gen_btn.bind('<Enter>', lambda e: self._btn_hover(True))
+        self.gen_btn.bind('<Leave>', lambda e: self._btn_hover(False))
+
+        self.prog = ttk.Progressbar(gen_f, mode='determinate', length=400)
+        self.prog.pack_forget()
 
         # Status bar
-        status_frame = tk.Frame(gen_frame, bg=self.COLORS['bg'], height=28)
-        status_frame.pack(fill=tk.X)
-        status_frame.pack_propagate(False)
+        st_f = tk.Frame(self.main, bg=self.COLORS['bg'], height=24)
+        st_f.pack(fill=tk.X)
+        st_f.pack_propagate(False)
 
-        self.status_var = tk.StringVar(value=_("💡 请选择一个文件夹开始", "💡 Select a folder to start"))
-        self.status_label = tk.Label(
-            status_frame,
-            textvariable=self.status_var,
-            font=('Segoe UI', 9),
-            bg=self.COLORS['bg'],
-            fg=self.COLORS['text_secondary'],
-            anchor=tk.W,
-        )
-        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.dot = tk.Canvas(st_f, width=8, height=8, bg=self.COLORS['bg'], highlightthickness=0)
+        self.dot.pack(side=tk.LEFT, padx=(0, 4))
+        self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['text_secondary'], outline='')
 
-        self.footer_var = tk.StringVar(value=_("就绪 ✓", "Ready ✓"))
-        footer_label = tk.Label(
-            status_frame,
-            textvariable=self.footer_var,
-            font=('Segoe UI', 9),
-            bg=self.COLORS['bg'],
-            fg=self.COLORS['text_secondary'],
-            anchor=tk.E,
-        )
-        footer_label.pack(side=tk.RIGHT)
+        self.status_var = tk.StringVar(value=self.tr('start_hint'))
+        tk.Label(st_f, textvariable=self.status_var, font=('Segoe UI', 9),
+                 bg=self.COLORS['bg'], fg=self.COLORS['text_secondary'],
+                 anchor=tk.W).pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-    def on_gen_btn_hover(self, is_hover):
+        self.footer_var = tk.StringVar(value=self.tr('status_ready'))
+        tk.Label(st_f, textvariable=self.footer_var, font=('Segoe UI', 9),
+                 bg=self.COLORS['bg'], fg=self.COLORS['text_secondary'],
+                 anchor=tk.E).pack(side=tk.RIGHT)
+
+    def _btn_hover(self, enter):
         if not self.generating:
-            self.gen_btn.configure(
-                bg=self.COLORS['primary_hover'] if is_hover else self.COLORS['primary']
-            )
+            self.gen_btn.configure(bg=self.COLORS['primary_hover'] if enter else self.COLORS['primary'])
+
+    def bind_shortcuts(self):
+        self.root.bind('<Control-o>', lambda e: self.browse_folder())
+        self.root.bind('<Control-g>', lambda e: self.generate())
+        self.root.bind('<Control-v>', lambda e: self.paste_folder())
+        self.root.bind('<Escape>', lambda e: self.root.quit() if not self.generating else None)
 
     def center_window(self):
         self.root.update_idletasks()
-        w = self.root.winfo_width()
-        h = self.root.winfo_height()
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
-        x = (sw - w) // 2
-        y = (sh - h) // 2
-        self.root.geometry(f"{w}x{h}+{x}+{y}")
+        w, h = self.root.winfo_width(), self.root.winfo_height()
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        self.root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+
+    # ── Folder operations ──
+
+    def load_from_path(self):
+        path = self.path_var.get().strip().strip('"')
+        if os.path.isdir(path):
+            self.load_folder(path)
+        else:
+            self.status_var.set(f"Invalid path: {path}")
 
     def browse_folder(self):
-        folder = filedialog.askdirectory(title=_("选择要导出的文件夹", "Select a folder to export"))
+        folder = filedialog.askdirectory(title="Select a folder")
         if folder:
+            self.path_var.set(folder)
             self.load_folder(folder)
+
+    def clear_folder(self):
+        self.current_folder = None
+        self.file_list = []
+        self.total_size = 0
+        self.path_var.set('')
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        self.gen_btn.config(state='disabled')
+        self.stats_lbl.config(text=self.tr('no_folder'))
+        self.status_var.set(self.tr('start_hint'))
+        self.footer_var.set(self.tr('status_ready'))
+        self.dot.delete('all')
+        self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['text_secondary'], outline='')
+        self.fname_var.set('knowledge_export')
+
+    def paste_folder(self):
+        try:
+            path = self.root.clipboard_get().strip().strip('"')
+            if os.path.isdir(path):
+                self.path_var.set(path)
+                self.load_folder(path)
+                self.status_var.set(self.tr('paste_done'))
+            else:
+                self.status_var.set(self.tr('clip_empty'))
+        except Exception:
+            self.status_var.set(self.tr('clip_empty'))
 
     def load_folder(self, folder_path):
         if self.generating:
             return
-
         self.current_folder = folder_path
-        self.status_var.set(_("📂 正在扫描：", "📂 Scanning: ") + folder_path + "...")
+        self.status_var.set(f"{self.tr('scanning')} {folder_path}")
         self.root.update_idletasks()
 
         def scan():
-            file_list, total_size = collect_files_info(folder_path)
-            self.root.after(0, lambda: self.on_folder_scanned(file_list, total_size))
-
+            fl, ts = collect_files_info(folder_path)
+            self.root.after(0, lambda: self._on_scanned(fl, ts))
         threading.Thread(target=scan, daemon=True).start()
 
-    def on_folder_scanned(self, file_list, total_size):
+    def _on_scanned(self, file_list, total_size):
         self.file_list = file_list
         self.total_size = total_size
-
         supported = sum(1 for f in file_list if f['supported'])
-        self.stats_label.config(
-            text=_(
-                f"📊 共 {len(file_list)} 个文件 | 支持 {supported} 个 | 总大小 {human_readable_size(total_size)}",
-                f"📊 {len(file_list)} files | {supported} supported | {human_readable_size(total_size)} total"
-            )
-        )
-
-        self.update_file_tree()
+        self.stats_lbl.config(text=f"{len(file_list)} {self.tr('files')} | {supported} {self.tr('supported')} | {human_readable_size(total_size)}")
+        self._update_tree()
 
         if file_list:
             self.gen_btn.config(state='normal')
-            self.status_var.set(_(
-                f"✅ 已加载 {len(file_list)} 个文件，{supported} 个可解析",
-                f"✅ {len(file_list)} files loaded, {supported} parseable"
-            ))
+            self.status_var.set(f"{len(file_list)} {self.tr('files')}, {supported} {self.tr('parseable')}")
+            self.dot.delete('all')
+            self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
         else:
             self.gen_btn.config(state='disabled')
-            self.status_var.set(_("⚠️ 文件夹为空或没有可读文件", "⚠️ Empty folder or no readable files"))
+            self.status_var.set(self.tr('empty'))
+            self.dot.delete('all')
+            self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['warning'], outline='')
 
-        folder_name = os.path.basename(os.path.normpath(self.current_folder))
-        self.filename_var.set(f"{folder_name}_knowledge_export")
+        self.fname_var.set(f"{os.path.basename(os.path.normpath(self.current_folder))}_export")
 
-    def update_file_tree(self):
+    def _update_tree(self):
         for item in self.tree.get_children():
             self.tree.delete(item)
-
-        supported_count = 0
-        for finfo in self.file_list:
-            ext = finfo['ext']
-            icon = '📄' if finfo['supported'] else '⏭️'
-            name = f"{icon} {finfo['rel_path']}"
-            status = _('✅ 支持', '✅ OK') if finfo['supported'] else _('⏭️ 跳过', '⏭️ Skip')
-            tag = 'supported' if finfo['supported'] else 'unsupported'
-
-            self.tree.insert(
-                '', 'end',
-                values=(name, finfo['size_hr'], '-', status),
-                tags=(tag,),
-            )
-            if finfo['supported']:
-                supported_count += 1
-
-        total = len(self.file_list)
-        self.footer_var.set(_(
-            f"{total} 个文件 | {supported_count} 个可解析",
-            f"{total} files | {supported_count} parseable"
-        ))
+        sc = 0
+        for i, f in enumerate(self.file_list):
+            icon = '\U0001f4c4' if f['supported'] else '\u23ed\ufe0f'
+            status = 'OK' if f['supported'] else 'Skip'
+            tag = ('ok' if f['supported'] else 'skip', 'even' if i % 2 == 0 else 'odd')
+            self.tree.insert('', 'end', values=(f"{icon} {f['rel_path']}", f['size_hr'], '-', status), tags=tag)
+            if f['supported']:
+                sc += 1
+        self.footer_var.set(f"{len(self.file_list)} {self.tr('files')} | {sc} {self.tr('parseable')}")
 
     def on_mode_change(self):
-        is_portal = self.mode_var.get() == "portal"
+        is_portal = self.mode_var.get() == 'portal'
+        self.single_f.pack_forget()
+        self.portal_f.pack_forget()
         if is_portal:
-            self.single_settings.grid_remove()
-            self.portal_settings.grid()
-            self.gen_btn.config(text=_("🏛️ 生成知识门户", "🏛️ Generate Portal"))
-            self.status_var.set(_(
-                "💡 门户模式：每个文档生成独立页面，带搜索和关键词过滤",
-                "💡 Portal: each doc as separate page, with search & keyword filter"
-            ))
+            self.portal_f.pack(fill=tk.X)
+            self.gen_btn.config(text=self.tr('gen_portal_btn'))
+            self.status_var.set("Portal: separate pages with search" if self._lang == 'en' else "门户模式：独立页面，支持搜索")
         else:
-            self.portal_settings.grid_remove()
-            self.single_settings.grid()
-            self.gen_btn.config(text=_("🚀 一键生成 HTML", "🚀 Generate HTML"))
-            self.status_var.set(_(
-                "💡 单文件模式：所有文档合并为一个 HTML 文件",
-                "💡 Single HTML: all docs in one file"
-            ))
-
-    def browse_portal_output(self):
-        folder = filedialog.askdirectory(
-            title=_("选择知识门户输出目录", "Select portal output directory"),
-            initialdir=os.path.dirname(self.portal_output_var.get())
-        )
-        if folder:
-            self.portal_output_var.set(folder)
+            self.single_f.pack(fill=tk.X)
+            self.gen_btn.config(text=self.tr('gen_btn'))
+            self.status_var.set("Single HTML: all in one file" if self._lang == 'en' else "单文件模式：所有文档合并为一个文件")
 
     def browse_output(self):
-        file_path = filedialog.asksaveasfilename(
-            title=_("选择输出 HTML 文件", "Select output HTML file"),
-            defaultextension=".html",
-            filetypes=[(_("HTML 文件", "HTML files"), "*.html"), (_("所有文件", "All files"), "*.*")],
-            initialfile=self.filename_var.get() + ".html",
-        )
-        if file_path:
-            self.output_var.set(file_path)
-            basename = os.path.splitext(os.path.basename(file_path))[0]
-            self.filename_var.set(basename)
+        fp = filedialog.asksaveasfilename(title="Save HTML", defaultextension=".html",
+                                           filetypes=[("HTML files","*.html"),("All files","*.*")],
+                                           initialfile=self.fname_var.get()+".html")
+        if fp:
+            self.out_var.set(fp)
+            self.fname_var.set(os.path.splitext(os.path.basename(fp))[0])
 
-    def update_output_path(self):
-        name = self.filename_var.get().strip()
+    def browse_portal_out(self):
+        f = filedialog.askdirectory(title="Output directory")
+        if f:
+            self.pout_var.set(f)
+
+    def update_out_path(self):
+        name = self.fname_var.get().strip()
         if name:
-            current = self.output_var.get()
-            dir_path = os.path.dirname(current) if os.path.dirname(current) else os.path.join(
-                os.path.expanduser("~"), "Desktop"
-            )
-            self.output_var.set(os.path.join(dir_path, f"{name}.html"))
+            cur = self.out_var.get()
+            d = os.path.dirname(cur) if os.path.dirname(cur) else os.path.join(os.path.expanduser("~"), "Desktop")
+            self.out_var.set(os.path.join(d, f"{name}.html"))
 
-    def browse_output_or_portal(self):
-        if self.mode_var.get() == "portal":
-            self.browse_portal_output()
-        else:
-            self.browse_output()
-
-    def generate_html(self):
+    def generate(self):
         if self.generating or not self.current_folder or not self.file_list:
             return
 
-        is_portal = self.mode_var.get() == "portal"
-        include_skipped = self.include_skipped_var.get()
+        is_portal = self.mode_var.get() == 'portal'
+        skip = self.skip_var.get()
 
         if is_portal:
             if not HAS_PORTAL:
-                messagebox.showerror(_("错误", "Error"), _("知识门户模块不可用", "Portal module unavailable"))
+                messagebox.showerror("Error", "Portal module unavailable")
                 return
-
-            output_dir = self.portal_output_var.get().strip()
-            if not output_dir:
-                messagebox.showerror(_("错误", "Error"), _("请设置知识门户输出目录", "Set portal output directory"))
+            out_dir = self.pout_var.get().strip()
+            if not out_dir:
+                messagebox.showerror("Error", "Set output directory")
                 return
-
-            per_page_str = self.per_page_var.get().strip()
+            pp = self.perpage_var.get().strip()
             per_page = 8000
-            if per_page_str:
+            if pp:
                 try:
-                    per_page = int(per_page_str)
+                    per_page = int(pp)
                     if per_page <= 0:
                         per_page = 8000
-                except ValueError:
-                    messagebox.showerror(_("错误", "Error"), _("每页字符数必须是正整数", "Chars/page must be a positive integer"))
+                except:
+                    messagebox.showerror("Error", "Invalid integer")
                     return
-
-            self.generating = True
-            self.gen_btn.config(state='disabled', text=_("⏳ 正在生成门户...", "⏳ Generating portal..."), bg='#999')
-            self.progress['value'] = 0
-            self.progress.pack(pady=(4, 0))
-            self.status_var.set(_("🏛️ 正在生成知识门户...", "🏛️ Generating portal..."))
-
-            def generate():
+            self._start_gen("Generating portal..." if self._lang == 'en' else "正在生成门户...")
+            def task():
                 try:
-                    result = generate_portal(
-                        folder_path=self.current_folder,
-                        output_dir=output_dir,
-                        max_chars_per_page=per_page,
-                        include_skipped=include_skipped,
-                    )
-                    self.root.after(0, lambda: self.on_portal_complete(result))
+                    r = generate_portal(folder_path=self.current_folder, output_dir=out_dir,
+                                        max_chars_per_page=per_page, include_skipped=skip,
+                                        language=self._lang)
+                    self.root.after(0, lambda: self._portal_done(r))
                 except Exception as e:
-                    self.root.after(0, lambda: self.on_generation_error(str(e)))
-
-            threading.Thread(target=generate, daemon=True).start()
-            self.simulate_progress()
+                    self.root.after(0, lambda: self._gen_err(str(e)))
+            threading.Thread(target=task, daemon=True).start()
+            self._sim_progress()
             return
 
-        # ── Single HTML Mode ──
-        output_path = self.output_var.get().strip()
-        if not output_path:
-            messagebox.showerror(_("错误", "Error"), _("请设置输出路径", "Set output path"))
+        out = self.out_var.get().strip()
+        if not out:
+            messagebox.showerror("Error", "Set output path")
             return
-
-        if not output_path.lower().endswith('.html'):
-            output_path += '.html'
-            self.output_var.set(output_path)
-
-        max_chars_str = self.max_chars_var.get().strip()
+        if not out.lower().endswith('.html'):
+            out += '.html'
+            self.out_var.set(out)
+        mc = self.max_ch_var.get().strip()
         max_chars = None
-        if max_chars_str:
+        if mc:
             try:
-                max_chars = int(max_chars_str)
+                max_chars = int(mc)
                 if max_chars <= 0:
                     max_chars = None
-            except ValueError:
-                messagebox.showerror(_("错误", "Error"), _("最大字符数必须是正整数", "Max chars must be a positive integer"))
+            except:
+                messagebox.showerror("Error", "Invalid integer")
                 return
-
-        self.generating = True
-        self.gen_btn.config(state='disabled', text=_("⏳ 正在生成...", "⏳ Generating..."), bg='#999')
-        self.progress['value'] = 0
-        self.progress.pack(pady=(4, 0))
-        self.status_var.set(_("⏳ 正在解析文件并生成 HTML...", "⏳ Parsing files and generating HTML..."))
-
-        def generate():
+        self._start_gen("Generating..." if self._lang == 'en' else "正在生成...")
+        def task():
             try:
-                html_content, parsed_count, skipped_count, error_count, total_chars = \
-                    build_html_from_files(
-                        self.current_folder,
-                        self.file_list,
-                        output_path,
-                        max_chars=max_chars,
-                        include_skipped=include_skipped,
-                    )
-
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(html_content)
-
-                self.root.after(0, lambda: self.progress.config(value=100))
-                self.root.after(0, lambda: self.on_generation_complete(
-                    output_path, parsed_count, skipped_count, error_count, total_chars
-                ))
+                html, parsed, skipped, errors, chars = build_html_from_files(
+                    self.current_folder, self.file_list, out,
+                    max_chars=max_chars, include_skipped=skip)
+                with open(out, 'w', encoding='utf-8') as f:
+                    f.write(html)
+                self.root.after(0, lambda: self.prog.config(value=100))
+                self.root.after(0, lambda: self._gen_done(out, parsed, skipped, errors, chars))
             except Exception as e:
-                self.root.after(0, lambda: self.on_generation_error(str(e)))
+                self.root.after(0, lambda: self._gen_err(str(e)))
+        threading.Thread(target=task, daemon=True).start()
+        self._sim_progress()
 
-        threading.Thread(target=generate, daemon=True).start()
-        self.simulate_progress()
+    def _start_gen(self, msg):
+        self.generating = True
+        self.gen_btn.config(state='disabled', text=msg, bg='#999')
+        self.prog['value'] = 0
+        self.prog.pack(pady=(4, 0))
+        self.status_var.set(msg)
+        self.dot.delete('all')
+        self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['warning'], outline='')
 
-    def simulate_progress(self):
-        if not self.generating:
-            return
-        current = self.progress['value']
-        if current < 90:
-            self.progress['value'] = min(current + 5, 90)
-            self.root.after(300, self.simulate_progress)
+    def _sim_progress(self):
+        if self.generating:
+            v = self.prog['value']
+            if v < 90:
+                self.prog['value'] = min(v + 5, 90)
+                self.root.after(300, self._sim_progress)
 
-    def on_generation_complete(self, output_path, parsed_count, skipped_count, error_count, total_chars):
+    def _gen_done(self, out_path, parsed, skipped, errors, chars):
         self.generating = False
-        self.progress['value'] = 100
+        self.prog['value'] = 100
+        fs = os.path.getsize(out_path) if os.path.exists(out_path) else 0
+        self.gen_btn.config(state='normal', text=self.tr('gen_btn'), bg=self.COLORS['primary'])
+        st = (f"{self.tr('gen_done')} {parsed} files" + (f", {skipped} skipped" if skipped else "") +
+              (f", {errors} errors" if errors else "") + f" | {chars:,} chars | {human_readable_size(fs)}")
+        self.status_var.set(st)
+        self.footer_var.set(f"OK {os.path.basename(out_path)}")
+        self.dot.delete('all')
+        self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
+        if messagebox.askyesno("Success", f"HTML generated!\n\nOutput: {out_path}\nParsed: {parsed}\nSkipped: {skipped}\nErrors: {errors}\nChars: {chars:,}\nSize: {human_readable_size(fs)}\n\n{self.tr('open_folder')}"):
+            self._open_folder(out_path)
 
-        file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
-
-        self.gen_btn.config(
-            state='normal',
-            text=_("🚀 一键生成 HTML", "🚀 Generate HTML"),
-            bg=self.COLORS['primary'],
-        )
-
-        status = _(
-            f"✅ 生成成功！{parsed_count} 个文件已解析"
-            f"{f'，{skipped_count} 个跳过' if skipped_count else ''}"
-            f"{f'，{error_count} 个错误' if error_count else ''}"
-            f" | 共 {total_chars:,} 字符"
-            f" | 文件大小 {human_readable_size(file_size)}",
-            f"✅ Generated! {parsed_count} files parsed"
-            f"{f', {skipped_count} skipped' if skipped_count else ''}"
-            f"{f', {error_count} errors' if error_count else ''}"
-            f" | {total_chars:,} total chars"
-            f" | {human_readable_size(file_size)}"
-        )
-        self.status_var.set(status)
-        self.footer_var.set(f"✅ {os.path.basename(output_path)}")
-
-        result = messagebox.askyesno(
-            _("✅ 生成成功", "✅ Success"),
-            _(
-                f"HTML 已成功生成！\n\n"
-                f"📄 输出文件：{output_path}\n"
-                f"📊 解析文件：{parsed_count} 个\n"
-                f"⏭️ 跳过文件：{skipped_count} 个\n"
-                f"❌ 错误文件：{error_count} 个\n"
-                f"📝 总字符数：{total_chars:,}\n"
-                f"💾 文件大小：{human_readable_size(file_size)}\n\n"
-                f"是否打开输出文件所在文件夹？",
-                f"HTML generated successfully!\n\n"
-                f"📄 Output: {output_path}\n"
-                f"📊 Parsed: {parsed_count}\n"
-                f"⏭️ Skipped: {skipped_count}\n"
-                f"❌ Errors: {error_count}\n"
-                f"📝 Total chars: {total_chars:,}\n"
-                f"💾 File size: {human_readable_size(file_size)}\n\n"
-                f"Open output folder?"
-            )
-        )
-        if result:
-            self.open_file_location(output_path)
-
-    def on_portal_complete(self, result):
+    def _portal_done(self, result):
         self.generating = False
-        self.progress['value'] = 100
-
-        doc_count = result["doc_count"]
-        total_chars = result["total_chars"]
-        output_dir = result["output_dir"]
-        index_file = result.get("index_file", "")
-        skipped = result.get("skipped", 0)
-        errors = result.get("errors", 0)
-
-        self.gen_btn.config(
-            state='normal',
-            text=_("🏛️ 生成知识门户", "🏛️ Generate Portal"),
-            bg=self.COLORS['primary'],
-        )
-
-        status = _(
-            f"✅ 门户生成成功！{doc_count} 个页面"
-            f"{f'，{skipped} 个跳过' if skipped else ''}"
-            f"{f'，{errors} 个错误' if errors else ''}"
-            f" | 共 {total_chars:,} 字符",
-            f"✅ Portal generated! {doc_count} pages"
-            f"{f', {skipped} skipped' if skipped else ''}"
-            f"{f', {errors} errors' if errors else ''}"
-            f" | {total_chars:,} total chars"
-        )
-        self.status_var.set(status)
-        self.footer_var.set(f"✅ {os.path.basename(output_dir)}")
-
-        has_index = index_file and os.path.exists(index_file)
-        msg = _(
-            f"🏛️ 知识门户已成功生成！\n\n"
-            f"📂 输出目录：{output_dir}\n"
-            f"🏠 首页文件：{index_file if has_index else '(无)'}\n"
-            f"📄 生成页面：{doc_count} 个\n"
-            f"⏭️ 跳过文件：{skipped} 个\n"
-            f"❌ 错误文件：{errors} 个\n"
-            f"📝 总字符数：{total_chars:,}\n\n",
-            f"🏛️ Portal generated successfully!\n\n"
-            f"📂 Output: {output_dir}\n"
-            f"🏠 Index: {index_file if has_index else '(none)'}\n"
-            f"📄 Pages: {doc_count}\n"
-            f"⏭️ Skipped: {skipped}\n"
-            f"❌ Errors: {errors}\n"
-            f"📝 Total chars: {total_chars:,}\n\n"
-        )
-
-        if has_index:
-            msg += _(
-                "是否打开输出目录？\n\n"
-                "💡 使用提示：\n"
-                "1. 双击 index.html 在浏览器打开\n"
-                "2. 搜索关键词找到目标文档\n"
-                "3. 点击文档标题在新标签页打开\n"
-                "4. 按 Ctrl+Shift+. 唤醒 Edge Copilot 提问",
-                "Open output folder?\n\n"
-                "💡 Tips:\n"
-                "1. Double-click index.html to open\n"
-                "2. Search keywords to find docs\n"
-                "3. Click title to open in new tab\n"
-                "4. Press Ctrl+Shift+. for Edge Copilot"
-            )
-            result_dialog = messagebox.askyesno(_("✅ 门户生成成功", "✅ Portal Generated"), msg)
-            if result_dialog:
-                self.open_file_location(index_file)
+        self.prog['value'] = 100
+        dc, tc = result["doc_count"], result["total_chars"]
+        od, idx = result["output_dir"], result.get("index_file", "")
+        sk, er = result.get("skipped", 0), result.get("errors", 0)
+        self.gen_btn.config(state='normal', text=self.tr('gen_portal_btn'), bg=self.COLORS['primary'])
+        st = (f"{self.tr('portal_done')} {dc} pages" + (f", {sk} skipped" if sk else "") +
+              (f", {er} errors" if er else "") + f" | {tc:,} chars")
+        self.status_var.set(st)
+        self.footer_var.set(f"OK {os.path.basename(od)}")
+        self.dot.delete('all')
+        self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
+        hi = idx and os.path.exists(idx)
+        msg = f"Portal generated!\n\nOutput: {od}\nPages: {dc}\nSkipped: {sk}\nErrors: {er}\nChars: {tc:,}\n\n"
+        if hi:
+            if messagebox.askyesno("Success", msg + self.tr('open_folder')):
+                self._open_folder(idx)
         else:
-            msg += _("⚠️ 未生成任何文档页面", "⚠️ No pages generated")
-            messagebox.showinfo(_("完成", "Done"), msg)
+            messagebox.showinfo("Done", msg + "No pages generated")
 
-    def on_generation_error(self, error_msg):
+    def _gen_err(self, msg):
         self.generating = False
-        self.progress['value'] = 0
-        self.progress.pack_forget()
+        self.prog['value'] = 0
+        self.prog.pack_forget()
+        self.gen_btn.config(state='normal', text=self.tr('gen_btn'), bg=self.COLORS['primary'])
+        self.status_var.set("Failed: " + msg)
+        self.dot.delete('all')
+        self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['error'], outline='')
+        messagebox.showerror("Error", msg)
 
-        self.gen_btn.config(
-            state='normal',
-            text=_("🚀 一键生成 HTML", "🚀 Generate HTML"),
-            bg=self.COLORS['primary'],
-        )
-
-        self.status_var.set(_("❌ 生成失败：", "❌ Failed: ") + error_msg)
-        messagebox.showerror(
-            _("生成失败", "Generation Failed"),
-            _("HTML 生成过程中出现错误：\n\n", "Error during generation:\n\n") + error_msg
-        )
-
-    def open_file_location(self, file_path):
+    def _open_folder(self, path):
         try:
             if sys.platform == 'win32':
-                os.startfile(os.path.dirname(file_path))
-            elif sys.platform == 'darwin':
-                os.system(f'open "{os.path.dirname(file_path)}"')
-            else:
-                os.system(f'xdg-open "{os.path.dirname(file_path)}"')
-        except Exception:
+                os.startfile(os.path.dirname(path))
+        except:
             pass
 
 
-# ============================================================
-#  Simple DnD capable root window
-# ============================================================
-
-class DnDRoot(tk.Tk):
-    """Tk root with basic drag and drop support via clipboard/path watching."""
-    def __init__(self):
-        super().__init__()
-
-    def dnd_bind(self, event_type, callback):
-        """Stub for dnd binding."""
-        pass
-
-
-# ============================================================
-#  Entry Point
-# ============================================================
-
 def main():
-    """Launch the DocPortal Desktop GUI."""
     try:
         from tkinterdnd2 import TkinterDnD
         root = TkinterDnD.Tk()
     except ImportError:
-        root = DnDRoot()
-
+        root = tk.Tk()
     app = DocPortalUI(root)
-
     if len(sys.argv) > 1:
-        folder = sys.argv[1]
-        if os.path.isdir(folder):
-            root.after(100, lambda: app.load_folder(folder))
-
+        f = sys.argv[1]
+        if os.path.isdir(f):
+            root.after(100, lambda: app.load_folder(f))
     root.mainloop()
 
 

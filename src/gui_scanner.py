@@ -251,5 +251,5 @@ def build_html_from_files(
 
 
 def _(zh: str, en: str) -> str:
-    """Return bilingual label: 中文 / English"""
-    return f"{zh} / {en}"
+    """Return English label only."""
+    return en
