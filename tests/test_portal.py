@@ -2,7 +2,6 @@
 Tests for the portal generator module.
 """
 import os
-import shutil
 import tempfile
 
 from src.generator.portal import (

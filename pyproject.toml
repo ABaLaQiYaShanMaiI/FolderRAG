@@ -36,5 +36,8 @@ Homepage = "https://github.com/ABaLaQiYaShanMaiI/FolderRAG"
 where = ["src"]
 include = ["src*"]
 
+[tool.ruff]
+line-length = 120
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
