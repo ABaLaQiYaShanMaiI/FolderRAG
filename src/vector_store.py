@@ -53,7 +53,7 @@ class VectorStore:
                 "modified_at": modified_at,
                 "extract_type": parsed_data.get("extract_type", "unknown"),
                 "mime": parsed_data.get("metadata", {}).get("mime", ""),
-                "hex_preview": parsed_data.get("hex_preview") or "",
+                "hex_preview": parsed_data.get("hex_preview"),
             }
             # ChromaDB metadata does not accept None values; remove any None entries
             meta = {k: v for k, v in meta.items() if v is not None}
@@ -73,12 +73,19 @@ class VectorStore:
         if not query_embeddings:
             return []
         query_embed = query_embeddings[0]
+
+        # Clamp k to actual document count to avoid ChromaDB error on empty/small collections
+        actual_count = self.collection.count()
+        if actual_count == 0:
+            return []
+        actual_k = min(k, actual_count)
+
         kwargs = {}
         if filters:
             kwargs["where"] = filters
         results = self.collection.query(
             query_embeddings=[query_embed],
-            n_results=k,
+            n_results=actual_k,
             **kwargs,
             include=["metadatas", "documents", "distances"],
         )
@@ -109,5 +116,6 @@ class VectorStore:
                 "offset": meta.get("offset"),
                 "mime": meta.get("mime"),
                 "extract_type": meta.get("extract_type"),
+                "hex_preview": meta.get("hex_preview"),
             }
         return None

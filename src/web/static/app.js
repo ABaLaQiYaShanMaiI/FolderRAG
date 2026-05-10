@@ -2,14 +2,17 @@ async function search() {
   const query = document.getElementById('query').value;
   if (!query.trim()) return;
 
+  const searchBtn = document.getElementById('searchBtn');
   const resultsDiv = document.getElementById('results');
   resultsDiv.innerHTML = '<p>搜索中...</p>';
+  searchBtn.disabled = true;
 
   try {
+    const k = parseInt(document.getElementById('k').value) || 5;
     const resp = await fetch('/v1/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, k: 5 })
+      body: JSON.stringify({ query, k })
     });
     const data = await resp.json();
     const results = data.results;
@@ -21,14 +24,17 @@ async function search() {
 
     let html = '';
     results.forEach(r => {
+      const source = escapeHtml(r.source || '');
+      const text = escapeHtml(r.text || '');
+      const mime = escapeHtml(r.mime || '');
       html += `<div class="result-card">
         <div class="meta">
-          <span class="source">${r.source}</span>
+          <span class="source">${source}</span>
           <span>offset: ${r.offset}</span>
           <span class="score">相似度: ${(r.score * 100).toFixed(1)}%</span>
-          <span>${r.mime || ''}</span>
+          <span>${mime}</span>
         </div>
-        <p>${r.text.substring(0, 300)}${r.text.length > 300 ? '...' : ''}</p>`;
+        <p>${text.substring(0, 300)}${text.length > 300 ? '...' : ''}</p>`;
       
       if (r.extract_type === 'binary' && r.hex_preview) {
         html += `<div class="hex-preview">
@@ -40,8 +46,16 @@ async function search() {
     });
     resultsDiv.innerHTML = html;
   } catch (err) {
-    resultsDiv.innerHTML = `<p style="color:red">错误: ${err.message}</p>`;
+    resultsDiv.innerHTML = `<p style="color:red">错误: ${escapeHtml(err.message)}</p>`;
+  } finally {
+    searchBtn.disabled = false;
   }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
 }
 
 function formatHex(hexStr) {
@@ -63,3 +77,17 @@ function formatHex(hexStr) {
   }
   return result;
 }
+
+// Update doc count from stats endpoint
+async function updateDocCount() {
+  try {
+    const resp = await fetch('/v1/stats');
+    const data = await resp.json();
+    document.getElementById('docCount').textContent = data.doc_count;
+  } catch (err) {
+    console.error('Failed to fetch stats:', err);
+  }
+}
+
+// Page load: update stats
+document.addEventListener('DOMContentLoaded', updateDocCount);
