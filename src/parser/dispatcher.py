@@ -1,13 +1,13 @@
 import os
 import logging
+import magic
 from .text_parser import parse_text
 from .pdf_parser import parse_pdf
 from .office_parser import parse_office
 
-logger = logging.getLogger(__name__)
-
-import magic
 _magic = magic.Magic(mime=True)
+
+logger = logging.getLogger(__name__)
 
 
 def parse_file(filepath):
