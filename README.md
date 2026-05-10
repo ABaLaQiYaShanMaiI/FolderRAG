@@ -1,185 +1,72 @@
-# FolderRAG 📁 → 🔍
+# FolderRAG 📁 → 📄
 
-**基于文件夹监控的 RAG（检索增强生成）知识库系统**
+**文件夹 → 知识 HTML 导出工具**
 
-FolderRAG 自动监控指定文件夹中的文件变更，实时解析文档、分块、向量化，并通过语义搜索 API 提供智能检索能力。支持文本、PDF、Office 文档和二进制文件等多种格式。
-
----
-
-## 🚀 核心特性
-
-| 特性 | 说明 |
-|------|------|
-| **📂 文件夹实时监控** | 利用 Watchdog 监听文件创建/修改，自动增量索引 |
-| **📄 多格式解析** | 支持 TXT、PDF、DOCX、PPTX、XLSX 及二进制文件 |
-| **🧩 智能分块** | 可配置的文本分块大小和重叠窗口 |
-| **🔢 向量化嵌入** | 支持本地模型 (`BAAI/bge-small-zh-v1.5`) 和外部 API |
-| **🗃️ 向量存储** | 基于 ChromaDB 的持久化向量数据库 |
-| **🌐 RESTful API** | FastAPI 构建的高性能搜索接口 |
-| **🖥️ Web UI** | 内置搜索界面，支持 Hex 预览 |
-| **🐳 Docker 支持** | 一键部署 |
-
----
-
-## 📋 系统架构
-
-```
-┌─────────────────────────────────────────────┐
-│                 watch_folder/                │
-│   (用户放置文件的目录，由 Watchdog 监控)       │
-└─────────────────────┬───────────────────────┘
-                      │ 文件创建/修改事件
-                      ▼
-┌─────────────────────────────────────────────┐
-│              FolderWatcher                   │
-│   ┌──────────┐  ┌──────────┐  ┌──────────┐ │
-│   │  Parser  │→ │ Chunker  │→ │ Embedder │ │
-│   │ 解析文件  │  │ 文本分块  │  │ 向量化    │ │
-│   └──────────┘  └──────────┘  └──────────┘ │
-│                        │                    │
-│                        ▼                    │
-│                 ┌──────────────┐            │
-│                 │ VectorStore  │            │
-│                 │  (ChromaDB)  │            │
-│                 └──────────────┘            │
-└─────────────────────┬───────────────────────┘
-                      │ 查询
-                      ▼
-┌─────────────────────────────────────────────┐
-│              FastAPI Server                  │
-│   ┌──────────┐  ┌──────────────────────┐    │
-│   │ REST API │←│ Web UI (HTML+JS)     │    │
-│   │  搜索接口  │  │  语义搜索前端       │    │
-│   └──────────┘  └──────────────────────┘    │
-└─────────────────────────────────────────────┘
-```
-
----
-
-## 🛠️ 快速开始
-
-### 环境要求
-
-- Python 3.10+
-- （可选）Docker
-
-### 1️⃣ 本地安装
+FolderRAG 扫描本地文件夹中的所有文档，自动解析 PDF、Word、Excel、PPT 和文本文件，生成一份**结构化 HTML 文件**，可直接交给任何 AI/LLM 工具阅读。
 
 ```bash
-# 克隆仓库
-git clone https://github.com/your-username/FolderRAG.git
-cd FolderRAG
+python generate.py ./my_folder -o knowledge.html
+```
 
-# 创建虚拟环境（推荐）
-python -m venv venv
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-# source venv/bin/activate
+---
 
+## ✨ 核心功能
+
+| 功能 | 说明 |
+|------|------|
+| **📂 扫描文件夹** | 递归扫描目录下所有文件 |
+| **📄 多格式解析** | PDF、DOCX、PPTX、XLSX、TXT、MD、HTML 等 |
+| **📝 结构化输出** | 生成 `<article>` 标签包裹的 HTML，AI 友好 |
+| **🎯 长度控制** | `--max-chars` 参数限制输出总字符数 |
+| **⚡ 轻量无依赖** | 无需数据库、无需向量模型、无需 Web 服务 |
+
+---
+
+## 🚀 快速开始
+
+```bash
 # 安装依赖
 pip install -r requirements.txt
-```
 
-### 2️⃣ 配置环境变量
+# 解析文件夹，输出 HTML
+python generate.py ./文档 -o knowledge.html
 
-```bash
-# 复制配置模板
-cp .env.example .env
-# 编辑 .env 文件，按需修改配置
-```
-
-**.env 配置说明：**
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `HOST` | `0.0.0.0` | 服务监听地址 |
-| `PORT` | `8000` | 服务端口 |
-| `WATCH_DIR` | `./watch_folder` | 要监控的文件夹路径 |
-| `EMBEDDER_BACKEND` | `local` | 嵌入后端：`local` 或 `deepseek` |
-| `DEEPSEEK_API_KEY` | - | 使用 DeepSeek 时需要 |
-| `VECTOR_DB_PATH` | `./data/chroma_db` | 向量数据库持久化路径 |
-| `CHUNK_SIZE` | `500` | 文本分块大小（近似字符数） |
-| `CHUNK_OVERLAP` | `50` | 分块重叠窗口 |
-
-### 3️⃣ 启动服务
-
-```bash
-# 确保 watch_folder 目录存在
-mkdir watch_folder
-
-# 启动服务
-python src/main.py
-```
-
-访问 **http://localhost:8000** 打开 Web 搜索界面。
-
-### 4️⃣ 使用 Docker
-
-```bash
-# 构建镜像
-docker build -t folderrag .
-
-# 运行容器
-docker run -d \
-  --name folderrag \
-  -p 8000:8000 \
-  -v $(pwd)/watch_folder:/app/watch_folder \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/.env:/app/.env \
-  folderrag
+# 控制输出长度（适合 LLM 上下文窗口）
+python generate.py ./文档 -o knowledge.html --max-chars 50000
 ```
 
 ---
 
-## 📚 API 文档
+## 📖 输出示例
 
-### 语义搜索
+生成的 `knowledge.html` 结构如下：
 
-```bash
-curl -X POST http://localhost:8000/v1/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "你的搜索内容", "k": 5}'
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Knowledge Export</title>
+</head>
+<body>
+  <h1>文件夹知识导出</h1>
+  <p>来源：C:\Users\...\文档</p>
+  <hr>
+
+  <article>
+    <h2>来源：技术文档/设计说明.pdf</h2>
+    <p>正文内容......</p>
+  </article>
+
+  <article>
+    <h2>来源：报告/2024年度总结.docx</h2>
+    <p>正文内容......</p>
+  </article>
+</body>
+</html>
 ```
 
-**请求参数：**
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `query` | string | ✅ | - | 搜索查询文本 |
-| `k` | integer | ❌ | `5` | 返回结果数量 |
-| `filters` | object | ❌ | `null` | 过滤条件（暂未使用） |
-
-**响应示例：**
-
-```json
-{
-  "results": [
-    {
-      "id": "chunk_id",
-      "text": "匹配的文本内容...",
-      "source": "文件路径",
-      "offset": 0,
-      "score": 0.92,
-      "mime": "application/pdf",
-      "extract_type": "text"
-    }
-  ]
-}
-```
-
-### 获取文档详情
-
-```bash
-curl http://localhost:8000/v1/doc/{doc_id}
-```
-
-### 健康检查
-
-```bash
-curl http://localhost:8000/health
-# {"status": "ok"}
-```
+每个文件独立一个 `<article>` 区块，标题带有来源路径，AI 工具可以清晰分辨不同来源。
 
 ---
 
@@ -187,150 +74,46 @@ curl http://localhost:8000/health
 
 ```
 FolderRAG/
+├── generate.py               ← 唯一入口
+├── requirements.txt          ← 依赖清单
 ├── src/
-│   ├── __init__.py          # 包初始化
-│   ├── main.py              # 主入口，协调各模块
-│   ├── watcher.py           # 文件夹监控（Watchdog 调度 + 防抖+哈希去重）
-│   ├── chunker.py           # 文本分块引擎（hash-based chunk_id）
-│   ├── embedder.py          # 向量化嵌入（本地/API）
-│   ├── vector_store.py      # ChromaDB 向量存储封装（不含 hex_preview）
-│   ├── parser/
-│   │   ├── __init__.py      # 导出 parse_file
-│   │   ├── dispatcher.py    # 解析调度（MIME 分发）
-│   │   ├── text_parser.py   # 纯文本解析
-│   │   ├── pdf_parser.py    # PDF 文本提取
-│   │   ├── office_parser.py # Office文档 (DOCX/PPTX/XLSX)
-│   │   └── binary_parser.py # 二进制文件（Hex预览+ASCII提取）
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── server.py        # FastAPI 应用组装
-│   │   ├── routes/
-│   │   │   ├── __init__.py
-│   │   │   ├── search.py    # 搜索路由
-│   │   │   └── docs.py      # 文档路由
-│   │   └── schemas.py       # Pydantic 数据模型
-│   └── web/
-│       ├── static/
-│       │   ├── index.html   # 搜索前端界面
-│       │   └── app.js       # 前端逻辑
-│       └── templates/
-│           └── search_results.html  # 模板占位
+│   └── parser/
+│       ├── __init__.py
+│       ├── dispatcher.py     ← MIME 分派器
+│       ├── text_parser.py    ← 文本文件解析
+│       ├── pdf_parser.py     ← PDF 解析
+│       └── office_parser.py  ← DOCX/PPTX/XLSX 解析
 ├── tests/
-│   ├── conftest.py          # 共享 fixtures
-│   ├── test_api.py          # API 接口测试
-│   └── test_parser.py       # 解析器单元测试
-├── pyproject.toml            # 项目元数据与工具配置
-├── config.yaml              # 全局配置（嵌入、分块、向量存储等）
-├── .env.example             # 环境变量模板
-├── requirements.txt         # Python 依赖
-├── Dockerfile               # Docker 构建文件
-├── .dockerignore            # Docker 构建忽略列表
-├── .gitignore               # Git 忽略列表
-├── .github/
-│   └── workflows/
-│       └── ci.yml           # CI 工作流 (ruff + pytest)
-├── LICENSE                  # MIT 许可证
-└── README.md                # 本文档
+│   └── test_parser.py        ← 解析器测试
+└── README.md
 ```
 
 ---
 
-## ⚙️ 配置详解
+## 📦 支持的格式
 
-### `config.yaml` 主要配置
-
-```yaml
-chunk:
-  max_tokens: 500           # 每个块的最大字符数
-  overlap_tokens: 50        # 块之间的重叠字符数
-
-embedder:
-  backend: local            # local 或 deepseek
-  model_name: BAAI/bge-small-zh-v1.5  # 本地模型名
-  batch_size: 32            # 批处理大小
-
-vector_store:
-  type: chroma
-  persist_directory: ./data/chroma_db  # 向量数据库存储路径
-
-binary:
-  hex_preview_bytes: 8192   # 二进制文件 Hex 预览字节数
-  index_ascii_segments: true # 是否索引可打印 ASCII 段
-```
+| 格式 | 解析引擎 |
+|------|----------|
+| TXT / MD / HTML / JSON / XML… | 原生 UTF-8 读取 |
+| PDF | `pdfminer.six` |
+| DOCX (Word) | `python-docx` |
+| PPTX (PowerPoint) | `python-pptx` |
+| XLSX (Excel) | `openpyxl` |
+| 其他格式 | 跳过（静默忽略） |
 
 ---
 
 ## 🧪 测试
 
 ```bash
-# 安装测试依赖
-pip install -e ".[dev]"
-
-# 运行测试
 pytest tests/ -v
-
-# 指定测试
-pytest tests/test_api.py -v
 ```
 
 ---
 
-## 📦 支持的文档格式
+## 🤝 使用场景
 
-| 格式 | MIME 类型 | 解析引擎 |
-|------|-----------|----------|
-| TXT, MD, etc. | `text/*` | 原生文本读取 |
-| PDF | `application/pdf` | `pdfminer.six` |
-| DOCX | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `python-docx` |
-| PPTX | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | `python-pptx` |
-| XLSX | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | `openpyxl` |
-| 二进制文件 | 其他 | 可打印 ASCII 提取 + Hex 预览 |
-
----
-
-## 🔧 技术栈
-
-| 组件 | 技术 |
-|------|------|
-| Web 框架 | [FastAPI](https://fastapi.tiangolo.com/) |
-| 文件监控 | [Watchdog](https://github.com/gorakhargosh/watchdog) |
-| 向量数据库 | [ChromaDB](https://www.trychroma.com/) |
-| 嵌入模型 | [Sentence-Transformers](https://www.sbert.net/) |
-| PDF 解析 | [pdfminer.six](https://github.com/pdfminer/pdfminer.six) |
-| Office 解析 | python-docx / python-pptx / openpyxl |
-| 请求重试 | [Tenacity](https://tenacity.readthedocs.io/) |
-| 容器化 | Docker |
-| 测试 | Pytest + httpx |
-| CI | GitHub Actions (ruff + pytest) |
-
----
-
-## 🤝 贡献指南
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
-
----
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
-
----
-
-## 🌟 路线图
-
-- [ ] 支持更多嵌入后端（OpenAI、Voyage、Cohere）
-- [ ] 基于 XLSX/CSV 的结构化数据索引
-- [ ] 增量删除/重命名文件同步
-- [ ] 多模态支持（图片 OCR）
-- [ ] 高性能批量索引模式
-- [ ] 中文/英文混合搜索优化
-- [ ] 可视化索引状态仪表盘
-
----
-
-> **FolderRAG** — 让文件夹变成可搜索的知识库，开启 RAG 应用的第一公里。
+- **给 Claude/GPT 喂本地知识**：将项目文档、PDF 书籍、笔记导出为 HTML，直接粘贴给 AI
+- **知识库批量整理**：将散落的文档统一解析为结构化文本
+- **RAG 预处理**：作为 RAG 管道的文档加载和清洗步骤
+- **文档归档检索**：配合 grep 或全文搜索工具使用

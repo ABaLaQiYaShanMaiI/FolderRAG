@@ -3,16 +3,15 @@ import logging
 from .text_parser import parse_text
 from .pdf_parser import parse_pdf
 from .office_parser import parse_office
-from .binary_parser import parse_binary
 
 logger = logging.getLogger(__name__)
 
-# Module-level singleton for magic.Magic to avoid repeated instantiation
 import magic
 _magic = magic.Magic(mime=True)
 
 
-def parse_file(filepath, config):
+def parse_file(filepath):
+    """Dispatch a file to the appropriate parser based on MIME type."""
     if not os.path.isfile(filepath):
         return None
     mime = _magic.from_file(filepath)
@@ -51,5 +50,5 @@ def parse_file(filepath, config):
                     "Consider converting to .xlsx.", filepath
                 )
             return parse_office(filepath, "xlsx")
-    # Default: binary handler
-    return parse_binary(filepath, config)
+    # Unsupported file type – skip silently
+    return None
