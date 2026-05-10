@@ -13,6 +13,8 @@ def wrap_doc_html(
     char_count: int,
     file_size_hr: str,
     index_link: str = "index.html",
+    mtime: str = "",
+    ctime: str = "",
 ) -> str:
     """
     将单个文档内容包装为独立的 HTML 页面。
@@ -22,13 +24,24 @@ def wrap_doc_html(
     escaped_text = escape(text)
     escaped_folder = escape(folder_name)
 
-    # 用 <pre> 保持原始格式，同时让 Copilot 更容易读取
+    # Breadcrumb: extract the file name from title
+    title_parts = title.replace('\\', '/').split('/')
+    breadcrumb_name = title_parts[-1] if title_parts else title
+
+    # Metadata timestamps
+    meta_lines = ""
+    if mtime:
+        meta_lines += f'<span>🕐 修改时间：{escape(mtime)}</span>'
+    if ctime:
+        meta_lines += f'<span>📅 创建时间：{escape(ctime)}</span>'
+
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="copilot-reading-context" content="full">
+<meta name="color-scheme" content="light dark">
 <title>{escaped_title} — {escaped_folder}</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -37,6 +50,15 @@ def wrap_doc_html(
     max-width: 900px; margin: 0 auto; padding: 24px 20px;
     background: #f8f9fa; color: #333; line-height: 1.7;
   }}
+  .breadcrumb {{
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.85em; color: #888; margin-bottom: 8px;
+    flex-wrap: wrap;
+  }}
+  .breadcrumb a {{ color: #1a73e8; text-decoration: none; }}
+  .breadcrumb a:hover {{ text-decoration: underline; }}
+  .breadcrumb .sep {{ color: #ccc; user-select: none; }}
+
   .nav-bar {{
     display: flex; align-items: center; gap: 12px;
     margin-bottom: 20px; padding-bottom: 12px;
@@ -72,11 +94,42 @@ def wrap_doc_html(
   }}
   .copilot-hint {{
     display: none;
-    /* Edge Copilot 读取提示：此页面为独立文档页，内容完整可读 */
+  }}
+
+  /* Dark mode */
+  @media (prefers-color-scheme: dark) {{
+    body {{ background: #1a1a2e; color: #e0e0e0; }}
+    .nav-bar {{ border-bottom-color: #333; }}
+    .nav-bar a:hover {{ background: #2a2a4e; }}
+    .nav-bar .title {{ color: #64b5f6; }}
+    .doc-meta {{ background: #2a2a4e; color: #ccc; }}
+    .doc-content {{ background: #16213e; border-color: #333; color: #e0e0e0; }}
+    .copy-btn {{ background: #1565c0; }}
+    .copy-btn:hover {{ background: #1976d2; }}
+    .footer {{ border-top-color: #333; color: #666; }}
+    .breadcrumb {{ color: #888; }}
+    .breadcrumb a {{ color: #64b5f6; }}
+    .breadcrumb .sep {{ color: #555; }}
+  }}
+
+  /* Print styles */
+  @media print {{
+    body {{ background: white; color: black; padding: 0.5in; }}
+    .nav-bar {{ border-bottom: 1px solid #ccc; }}
+    .doc-meta {{ background: #f5f5f5; border: 1px solid #ddd; }}
+    .doc-content {{ background: white; border: 1px solid #ddd; }}
+    .copy-btn {{ display: none; }}
+    .footer {{ border-top: 1px solid #ccc; }}
   }}
 </style>
 </head>
 <body>
+<div class="breadcrumb">
+  <a href="{escape(index_link)}">首页</a>
+  <span class="sep">›</span>
+  <span>{escape(breadcrumb_name)}</span>
+</div>
+
 <div class="nav-bar">
   <span class="title">📄 {escaped_title}</span>
   <a href="{escape(index_link)}">⬅ 返回首页</a>
@@ -86,6 +139,7 @@ def wrap_doc_html(
   <span>📂 {escaped_folder}</span>
   <span>📏 大小：{escape(file_size_hr)}</span>
   <span>📝 字符：{char_count:,}</span>
+  {meta_lines}
   <span>
     <button class="copy-btn" onclick="copyContent()">📋 复制全文</button>
   </span>
@@ -111,8 +165,8 @@ function copyContent() {{
   const text = content.textContent || content.innerText;
   navigator.clipboard.writeText(text).then(() => {{
     const btn = document.querySelector('.copy-btn');
-    btn.textContent = '✅ 已复制';
-    setTimeout(() => {{ btn.textContent = '📋 复制全文'; }}, 2000);
+    btn.textContent = '\\u2705 已复制';
+    setTimeout(() => {{ btn.textContent = '\\ud83d\\udccb 复制全文'; }}, 2000);
   }});
 }}
 </script>
@@ -186,7 +240,7 @@ def wrap_index_html(
     for doc in docs_meta:
         for tag in doc.get("tags", []):
             all_tags_set.add(tag)
-    all_tags = sorted(all_tags_set)[:40]  # 最多显示40个
+    all_tags = sorted(all_tags_set)[:40]
 
     tags_cloud_html = ""
     for tag in all_tags:
@@ -201,6 +255,7 @@ def wrap_index_html(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
 <title>{escaped_folder} — 知识门户</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -309,6 +364,33 @@ def wrap_index_html(
     text-align: center; color: #999; font-size: 0.82em;
     margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0;
   }}
+
+  /* Dark mode for index */
+  @media (prefers-color-scheme: dark) {{
+    body {{ background: #1a1a2e; color: #e0e0e0; }}
+    .search-section {{ background: #16213e; }}
+    .search-box {{ background: #1a1a2e; border-color: #333; color: #e0e0e0; }}
+    .search-box:focus {{ border-color: #64b5f6; }}
+    .tag-cloud {{ background: #16213e; }}
+    .tag-cloud-title {{ color: #aaa; }}
+    .cloud-tag {{ background: #2a2a4e; color: #64b5f6; }}
+    .cloud-tag:hover {{ background: #64b5f6; color: #1a1a2e; }}
+    .doc-card {{ background: #16213e; border-color: #333; }}
+    .card-title {{ color: #64b5f6; }}
+    .card-preview {{ color: #bbb; }}
+    .card-meta {{ color: #888; }}
+    .tag {{ background: #2a2a4e; color: #aaa; }}
+    .footer {{ border-top-color: #333; color: #666; }}
+    .empty-state {{ color: #888; }}
+  }}
+
+  /* Print styles for index */
+  @media print {{
+    body {{ background: white; color: black; padding: 0.2in; }}
+    .portal-header {{ background: #1a73e8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+    .search-section, .tag-cloud {{ display: none; }}
+    .doc-card {{ break-inside: avoid; border: 1px solid #ccc; }}
+  }}
 </style>
 </head>
 <body>
@@ -327,7 +409,7 @@ def wrap_index_html(
 
 <div class="search-section">
   <input type="text" class="search-box" id="searchInput"
-         placeholder="🔍 搜索文档名称或内容... (支持拼音首字母)">
+         placeholder="🔍 搜索文档名称或内容...">
   <div class="search-hint">
     💡 输入关键词快速过滤文档 &nbsp;|&nbsp; 点击文档标题在新标签页中打开
     &nbsp;|&nbsp; 打开后按 Ctrl+Shift+. 唤醒 Edge Copilot 提问
@@ -360,7 +442,6 @@ def wrap_index_html(
   const cards = docGrid.querySelectorAll('.doc-card');
   const cloudTags = document.querySelectorAll('.cloud-tag');
 
-  // 搜索过滤
   function filterDocs(query) {{
     const q = query.toLowerCase().trim();
     let visibleCount = 0;
@@ -375,13 +456,11 @@ def wrap_index_html(
     emptyState.classList.toggle('visible', visibleCount === 0);
   }}
 
-  // 实时搜索
   searchInput.addEventListener('input', function() {{
     cloudTags.forEach(t => t.classList.remove('active'));
     filterDocs(this.value);
   }});
 
-  // 标签点击过滤
   cloudTags.forEach(tag => {{
     tag.addEventListener('click', function() {{
       const tagText = this.getAttribute('data-tag') || this.textContent.trim();
@@ -392,7 +471,6 @@ def wrap_index_html(
     }});
   }});
 
-  // 回车触发搜索
   searchInput.addEventListener('keydown', function(e) {{
     if (e.key === 'Enter') {{
       filterDocs(this.value);

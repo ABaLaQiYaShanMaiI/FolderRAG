@@ -7,7 +7,7 @@ Usage:
     python generate.py <folder_path> -o <output.html>
     python generate.py <folder_path> -o <output.html> --max-chars 50000
 
-    # 🆕 门户模式：生成可搜索的分页知识门户（推荐 Edge Copilot 使用）
+    # 门户模式：生成可搜索的分页知识门户（推荐 Edge Copilot 使用）
     python generate.py <folder_path> --portal -o <output_dir/>
     python generate.py <folder_path> --portal -o <output_dir/> --max-chars-per-page 8000
 
@@ -22,7 +22,13 @@ import sys
 import pathlib
 import argparse
 import logging
+import io
 from html import escape
+
+# Fix console encoding for Windows (防止中文乱码)
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Ensure the project root is on sys.path so the src package is always findable
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -136,7 +142,7 @@ def build_html(folder_path, max_chars=None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="FolderRAG — 将文件夹中的文档解析为结构化 HTML 或分页知识门户"
+        description="FolderRAG - 将文件夹中的文档解析为结构化 HTML 或分页知识门户"
     )
     parser.add_argument("folder", help="要扫描的文件夹路径")
     parser.add_argument("-o", "--output", required=True, help="输出路径（文件或目录）")
@@ -165,18 +171,18 @@ def main():
     args = parser.parse_args()
 
     if not os.path.isdir(args.folder):
-        print(f"错误：路径不是有效的文件夹：{args.folder}", file=sys.stderr)
+        print("错误：路径不是有效的文件夹：%s" % args.folder, file=sys.stderr)
         sys.exit(1)
 
     if args.portal:
-        # ── 门户模式 ──
+        # -- 门户模式 --
         if not HAS_PORTAL:
             print("错误：门户模块不可用（src/generator/portal.py 未找到）", file=sys.stderr)
             sys.exit(1)
 
         output_dir = args.output
-        print(f"📁 正在生成知识门户到: {output_dir}")
-        print(f"📄 每页最大字符: {args.max_chars_per_page}")
+        print("[FolderRAG] 正在生成知识门户到: %s" % output_dir)
+        print("[FolderRAG] 每页最大字符: %d" % args.max_chars_per_page)
         print()
 
         result = generate_portal(
@@ -188,35 +194,35 @@ def main():
 
         index_file = result.get("index_file")
         if index_file and os.path.exists(index_file):
-            print("✅ 知识门户生成成功！")
-            print(f"   📂 输出目录: {result['output_dir']}")
-            print(f"   🏠 首页入口: {index_file}")
-            print(f"   📄 文档数量: {result['doc_count']}")
-            print(f"   📝 总字符数: {result['total_chars']:,}")
+            print("OK - 知识门户生成成功！")
+            print("   [输出目录] %s" % result['output_dir'])
+            print("   [首页入口] %s" % index_file)
+            print("   [文档数量] %d" % result['doc_count'])
+            print("   [总字符数] %s" % f"{result['total_chars']:,}")
             if result['skipped']:
-                print(f"   ⏭️ 跳过文件: {result['skipped']}")
+                print("   [跳过文件] %d" % result['skipped'])
             if result['errors']:
-                print(f"   ❌ 错误文件: {result['errors']}")
+                print("   [错误文件] %d" % result['errors'])
             print()
-            print("💡 使用提示：")
+            print("[使用提示]")
             print("   1. 双击 index.html 在浏览器中打开")
             print("   2. 搜索关键词找到目标文档")
             print("   3. 点击文档标题在新标签页打开")
             print("   4. 按 Ctrl+Shift+. 唤醒 Edge Copilot 提问")
         else:
-            print("⚠️ 未生成任何文档（文件夹为空或所有文件都无法解析）", file=sys.stderr)
+            print("警告：未生成任何文档（文件夹为空或所有文件都无法解析）", file=sys.stderr)
             sys.exit(1)
     else:
-        # ── 传统模式 ──
+        # -- 传统模式 --
         html = build_html(args.folder, max_chars=args.max_chars)
 
         with open(args.output, "w", encoding="utf-8") as f:
             f.write(html)
 
-        print(f"OK - 已生成知识文件: {args.output}")
-        print(f"    共包含 {html.count('<article>')} 个文件内容")
+        print("OK - 已生成知识文件: %s" % args.output)
+        print("    共包含 %d 个文件内容" % html.count('<article>'))
         print()
-        print("💡 提示：用 --portal 参数生成分页知识门户，可搜索且 Edge Copilot 友好")
+        print("提示：用 --portal 参数生成分页知识门户，可搜索且 Edge Copilot 友好")
 
 
 if __name__ == "__main__":

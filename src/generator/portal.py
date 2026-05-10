@@ -1,5 +1,5 @@
 """
-FolderRAG Portal — 智能分页知识门户生成器
+FolderRAG Portal - 智能分页知识门户生成器
 
 将文件夹中的文档解析为「可搜索的知识门户」：
 - 每个文档生成一个独立 HTML 页面（控制在 ~8000 字符以内）
@@ -33,7 +33,7 @@ def make_safe_filename(filepath: str, base_dir: str) -> str:
     # Remove extension
     name, _ = os.path.splitext(rel)
     # Replace unsafe chars
-    safe = re.sub(r'[<>:"/\\|?*]', '_', name)
+    safe = re.sub(r'[<>:"/\\\\|?*]', '_', name)
     safe = re.sub(r'[. ]+', '_', safe)
     safe = safe.strip('_')
     if not safe:
@@ -53,14 +53,15 @@ def human_readable_size(size_bytes: int) -> str:
 def extract_keywords(text: str, max_words: int = 8) -> list:
     """
     从文本中提取关键词标签。
-    使用简单的频率统计 + 长度过滤。
+    使用简单的频率统计 + 长度过滤 + 停用词过滤。
     """
     # Chinese + English word pattern
     chinese_chars = re.findall(r'[\u4e00-\u9fff]{2,6}', text)
     english_words = re.findall(r'\b[a-zA-Z]{3,15}\b', text.lower())
 
-    # Filter common stop words
+    # Comprehensive stop words list (Chinese + English)
     stop_words = {
+        # English common words
         'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have',
         'are', 'was', 'were', 'been', 'being', 'has', 'had', 'does',
         'did', 'will', 'would', 'could', 'should', 'may', 'might',
@@ -68,20 +69,66 @@ def extract_keywords(text: str, max_words: int = 8) -> list:
         'under', 'above', 'such', 'only', 'other', 'than', 'then',
         'also', 'very', 'just', 'more', 'some', 'these', 'those',
         'html', 'class', 'span', 'div', 'style', 'width', 'height',
+        'which', 'what', 'when', 'where', 'there', 'their', 'they',
+        'them', 'than', 'then', 'like', 'here', 'each', 'both',
+        'most', 'many', 'much', 'must', 'your', 'its', 'can', 'see',
+        'way', 'use', 'make', 'new', 'one', 'two', 'how', 'all',
+        'any', 'not', 'but', 'who', 'out', 'down', 'now', 'even',
+        'back', 'still', 'well', 'too', 'own', 'while', 'because',
+        'ever', 'every', 'same', 'through', 'thing', 'things',
+        'number', 'part', 'place', 'long', 'time', 'work', 'year',
+        'used', 'using', 'based', 'also', 'called', 'without',
+        'within', 'across', 'along', 'among', 'around',
+        'first', 'second', 'last', 'next', 'many', 'much',
+        'data', 'text', 'file', 'files', 'code', 'type',
+        'string', 'value', 'name', 'key', 'page', 'list',
+        'line', 'lines', 'word', 'words', 'char', 'chars',
+        'info', 'information', 'description', 'default',
+        # Chinese common stop words
+        '的', '了', '在', '是', '我', '有', '和', '就', '不', '人',
+        '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去',
+        '你', '会', '着', '没有', '看', '好', '自己', '这', '他', '她',
+        '它', '们', '来', '与', '及', '或', '以', '而', '但', '又',
+        '被', '让', '对', '从', '把', '向', '为', '为', '比', '等',
+        '能', '可', '所', '如', '之', '其', '中', '将', '还', '做',
+        '做', '给', '用', '更', '最', '并', '过', '开', '只', '有',
+        '学', '年', '月', '日', '时', '间', '后', '前', '时', '下',
+        '此', '因', '如', '何', '道', '种', '些', '几', '那', '哪',
+        '两', '多', '少', '个', '些', '每', '既', '除了', '虽然',
+        '因为', '所以', '但是', '如果', '可以', '应该', '需要',
+        '已经', '没有', '这些', '那些', '关于', '由于', '而且',
+        '或者', '不是', '就是', '而是', '还是', '并且', '从而',
+        '因此', '其中', '之一', '之间', '方面', '部分', '而且',
+        '同时', '之后', '之前', '今天', '明天', '昨天', '现在',
+        '然后', '比如', '比较', '非常', '一定', '可能', '全部',
+        '最后', '开始', '继续', '以及', '不过', '只是', '为了',
+        '那里', '这里', '怎么', '什么', '如果', '否则', '另外',
+        '帮助', '关于', '使用', '提供', '通过', '进行', '包括',
+        '还有', '以及', '其他', '其中', '由于', '因此', '所有',
+        '功能', '支持', '方法', '方式', '配置', '设置', '参数',
     }
 
     # Count frequency
     counter = Counter()
 
     for word in chinese_chars:
-        counter[word] += 1
-
-    for word in english_words:
-        if word not in stop_words and not word.isdigit():
+        if word not in stop_words:
             counter[word] += 1
 
-    # Return most common words
-    keywords = [word for word, _ in counter.most_common(max_words)]
+    for word in english_words:
+        if word not in stop_words and not word.isdigit() and len(word) >= 3:
+            counter[word] += 1
+
+    # Return most common words (ensure they have actual meaning)
+    keywords = []
+    for word, count in counter.most_common(max_words * 2):
+        # Skip pure number strings
+        if re.match(r'^\d+$', word):
+            continue
+        keywords.append(word)
+        if len(keywords) >= max_words:
+            break
+
     return keywords
 
 
@@ -112,10 +159,9 @@ def split_large_text(text: str, max_chars: int = 8000) -> list:
         if current_len + para_len > max_chars and current_part:
             # Save current part
             combined = '\n\n'.join(current_part)
-            title_suffix = f"（第{part_num}部分）" if part_num > 1 else ""
-            # Try to find section title nearby
-            subtitle = f" — {section_titles[part_num-1]}" if part_num <= len(section_titles) else ""
-            parts.append((combined, f"Part {part_num}{subtitle}{title_suffix}" if part_num > 1 else None))
+            title_suffix = "(第%d部分)" % part_num if part_num > 1 else ""
+            subtitle = " - %s" % section_titles[part_num-1] if part_num <= len(section_titles) else ""
+            parts.append((combined, "Part %d%s%s" % (part_num, subtitle, title_suffix) if part_num > 1 else None))
             current_part = [para]
             current_len = para_len
             part_num += 1
@@ -140,6 +186,7 @@ def generate_portal(
     output_dir: str,
     max_chars_per_page: int = 8000,
     include_skipped: bool = True,
+    show_progress: bool = True,
 ) -> dict:
     """
     将文件夹解析为可分页的知识门户。
@@ -149,6 +196,7 @@ def generate_portal(
         output_dir: 输出目录路径
         max_chars_per_page: 每个文档页面的最大字符数（默认8000）
         include_skipped: 是否在首页中包含不支持的文档标记
+        show_progress: 是否在 CLI 中显示进度
 
     返回：
         dict: {
@@ -160,7 +208,17 @@ def generate_portal(
         }
     """
     if not os.path.isdir(folder_path):
-        raise ValueError(f"路径不是有效的文件夹：{folder_path}")
+        raise ValueError("路径不是有效的文件夹：%s" % folder_path)
+
+    # 输出目录冲突检查
+    if os.path.exists(output_dir):
+        existing_items = os.listdir(output_dir)
+        non_hidden_items = [i for i in existing_items if not i.startswith('.')]
+        if non_hidden_items:
+            print("[注意] 输出目录已存在且非空：%s" % output_dir)
+            print("       已有内容：%d 个项目" % len(non_hidden_items))
+            print("       将覆盖其中同名文件，未改动文件会保留")
+            print()
 
     # Create output directory structure
     docs_dir = os.path.join(output_dir, "docs")
@@ -175,104 +233,150 @@ def generate_portal(
     folder_name = os.path.basename(os.path.abspath(folder_path))
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Walk through folder
+    # First pass: collect all files to show progress
+    all_files = []
     for dirpath, _, filenames in os.walk(folder_path):
         for fname in filenames:
             if fname.startswith('.'):
                 continue
             full_path = os.path.join(dirpath, fname)
-            if not os.path.isfile(full_path):
-                continue
+            if os.path.isfile(full_path):
+                all_files.append(full_path)
 
-            rel_path = os.path.relpath(full_path, folder_path)
-            file_size = os.path.getsize(full_path)
-            size_hr = human_readable_size(file_size)
+    total_files = len(all_files)
+    if show_progress:
+        print("  [扫描] 发现 %d 个文件，开始解析..." % total_files)
 
-            logger.info("Parsing: %s", rel_path)
+    # Walk through folder
+    for file_idx, full_path in enumerate(all_files):
+        rel_path = os.path.relpath(full_path, folder_path)
+        file_size = os.path.getsize(full_path)
+        size_hr = human_readable_size(file_size)
 
-            try:
-                result = parse_file(full_path)
-            except Exception as e:
-                logger.exception("Error parsing %s: %s", rel_path, e)
-                error_count += 1
-                continue
+        # 进度显示
+        if show_progress:
+            progress_pct = (file_idx + 1) / total_files * 100
+            bar_len = 30
+            filled = int(bar_len * (file_idx + 1) / total_files)
+            bar = '#' * filled + '.' * (bar_len - filled)
+            print("\r  [%s] %d/%d (%.0f%%) - %s" % (bar, file_idx + 1, total_files, progress_pct, rel_path[:50]), end='', flush=True)
 
-            if result is None:
-                logger.info("  -> Skipped (unsupported type)")
-                if include_skipped:
-                    # Still add a placeholder entry
-                    docs_meta.append({
-                        "title": rel_path,
-                        "file": None,
-                        "size": 0,
-                        "size_hr": size_hr,
-                        "preview": "[不支持的格式，已跳过]",
-                        "tags": ["⏭️ 跳过"],
-                        "skipped": True,
-                    })
-                skipped_count += 1
-                continue
+        try:
+            result = parse_file(full_path)
+        except Exception as e:
+            logger.exception("Error parsing %s: %s", rel_path, e)
+            if show_progress:
+                print("\n  [错误] %s - %s" % (rel_path, e))
+            error_count += 1
+            continue
 
-            text = (result.get("text") or "").strip()
-            if not text:
-                logger.info("  -> Skipped (empty content)")
-                skipped_count += 1
-                continue
+        if result is None:
+            if show_progress:
+                print("\n  [跳过] %s (不支持的格式)" % rel_path)
+            if include_skipped:
+                # Get file timestamps for metadata
+                try:
+                    mtime = os.path.getmtime(full_path)
+                    ctime = os.path.getctime(full_path)
+                    mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+                    ctime_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    mtime_str = ""
+                    ctime_str = ""
 
-            # Handle large documents by splitting
-            text_parts = split_large_text(text, max_chars_per_page)
-
-            for part_idx, (part_text, part_title) in enumerate(text_parts):
-                char_count = len(part_text)
-                total_chars += char_count
-
-                # Build safe filename
-                safe_name = make_safe_filename(full_path, folder_path)
-                if part_idx > 0:
-                    # Append part number to filename
-                    base, ext = os.path.splitext(safe_name)
-                    safe_name = f"{base}_part{part_idx + 1}{ext}"
-
-                doc_title = rel_path
-                if part_title:
-                    doc_title = f"{rel_path} — {part_title}"
-
-                # Generate individual HTML page
-                page_html = wrap_doc_html(
-                    title=doc_title,
-                    text=part_text,
-                    folder_name=folder_name,
-                    char_count=char_count,
-                    file_size_hr=size_hr,
-                    index_link="../index.html",
-                )
-
-                # Write to file
-                doc_file_path = os.path.join(docs_dir, safe_name)
-                with open(doc_file_path, 'w', encoding='utf-8') as f:
-                    f.write(page_html)
-
-                # Extract keywords from content
-                keywords = extract_keywords(part_text)
-
-                # Preview (first 200 chars)
-                preview = part_text[:200].replace('\n', ' ').strip()
-
-                # Add to metadata
                 docs_meta.append({
-                    "title": doc_title,
-                    "file": f"docs/{safe_name}",
-                    "size": char_count,
+                    "title": rel_path,
+                    "file": None,
+                    "size": 0,
                     "size_hr": size_hr,
-                    "preview": preview,
-                    "tags": keywords[:5],  # Limit to 5 tags per doc
-                    "skipped": False,
+                    "preview": "[不支持的格式，已跳过]",
+                    "tags": ["已跳过"],
+                    "skipped": True,
+                    "mtime": mtime_str,
+                    "ctime": ctime_str,
                 })
-                parsed_count += 1
+            skipped_count += 1
+            continue
 
-            if len(text_parts) > 1:
-                logger.info("  -> Split into %d pages (~%d chars each)",
-                           len(text_parts), max_chars_per_page)
+        text = (result.get("text") or "").strip()
+        if not text:
+            skipped_count += 1
+            continue
+
+        # Get file timestamps for metadata
+        try:
+            mtime = os.path.getmtime(full_path)
+            ctime = os.path.getctime(full_path)
+            mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+            ctime_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            mtime_str = ""
+            ctime_str = ""
+
+        # Handle large documents by splitting
+        text_parts = split_large_text(text, max_chars_per_page)
+
+        for part_idx, (part_text, part_title) in enumerate(text_parts):
+            char_count = len(part_text)
+            total_chars += char_count
+
+            # Build safe filename
+            safe_name = make_safe_filename(full_path, folder_path)
+            if part_idx > 0:
+                base, ext = os.path.splitext(safe_name)
+                safe_name = "%s_part%d%s" % (base, part_idx + 1, ext)
+
+            doc_title = rel_path
+            if part_title:
+                doc_title = "%s - %s" % (rel_path, part_title)
+
+            # Generate individual HTML page
+            page_html = wrap_doc_html(
+                title=doc_title,
+                text=part_text,
+                folder_name=folder_name,
+                char_count=char_count,
+                file_size_hr=size_hr,
+                index_link="../index.html",
+                mtime=mtime_str,
+                ctime=ctime_str,
+            )
+
+            # Write to file
+            doc_file_path = os.path.join(docs_dir, safe_name)
+            with open(doc_file_path, 'w', encoding='utf-8') as f:
+                f.write(page_html)
+
+            # Extract keywords from content
+            keywords = extract_keywords(part_text)
+
+            # Preview (first 200 chars)
+            preview = part_text[:200].replace('\n', ' ').strip()
+
+            # Add to metadata
+            docs_meta.append({
+                "title": doc_title,
+                "file": "docs/%s" % safe_name,
+                "size": char_count,
+                "size_hr": size_hr,
+                "preview": preview,
+                "tags": keywords[:5],  # Limit to 5 tags per doc
+                "skipped": False,
+                "mtime": mtime_str,
+                "ctime": ctime_str,
+            })
+            parsed_count += 1
+
+        if len(text_parts) > 1:
+            if show_progress:
+                print("\n  [拆分] %s -> 拆分为 %d 页" % (rel_path, len(text_parts)))
+
+    # Newline after progress bar
+    if show_progress:
+        print()
+
+    # 文档排序：按文件名（相对路径）排序
+    docs_meta.sort(key=lambda d: d.get("title", "").lower())
 
     # Generate index.html
     if docs_meta:
