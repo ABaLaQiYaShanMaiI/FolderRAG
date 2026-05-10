@@ -26,6 +26,8 @@ def collect_files(root_dir):
     """Walk through root_dir and yield all regular file paths (relative)."""
     for dirpath, _, filenames in os.walk(root_dir):
         for fname in filenames:
+            if fname.startswith('.'):
+                continue
             full_path = os.path.join(dirpath, fname)
             if os.path.isfile(full_path):
                 rel_path = os.path.relpath(full_path, root_dir)
@@ -85,6 +87,7 @@ def build_html(folder_path, max_chars=None):
             )
             break
 
+    file_count = len(articles)
     html = (
         "<!DOCTYPE html>\n"
         '<html lang="zh-CN">\n'
@@ -101,7 +104,7 @@ def build_html(folder_path, max_chars=None):
         "<body>\n"
         f"  <h1>文件夹知识导出</h1>\n"
         f"  <p>来源：{escape(os.path.abspath(folder_path))}</p>\n"
-        f"  <p>共 {html.count('<article>')} 个文件，{total_chars} 字符</p>\n"
+        f"  <p>共 {file_count} 个文件，{total_chars} 字符</p>\n"
         f"  <hr>\n"
         f"{chr(10).join(articles)}\n"
         "</body>\n"

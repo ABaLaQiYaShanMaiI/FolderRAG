@@ -10,7 +10,6 @@ def parse_pdf(filepath):
         return {
             "extract_type": "text",
             "text": text,
-            "hex_preview": None,
             "metadata": {"mime": "application/pdf"},
         }
     except Exception as e:

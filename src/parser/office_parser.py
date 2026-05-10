@@ -12,7 +12,6 @@ def parse_office(filepath, filetype):
             return {
                 "extract_type": "text",
                 "text": text,
-                "hex_preview": None,
                 "metadata": {"mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
             }
         elif filetype == "pptx":
@@ -24,7 +23,6 @@ def parse_office(filepath, filetype):
             return {
                 "extract_type": "text",
                 "text": text,
-                "hex_preview": None,
                 "metadata": {"mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation"},
             }
         elif filetype == "xlsx":
@@ -43,7 +41,6 @@ def parse_office(filepath, filetype):
             return {
                 "extract_type": "text",
                 "text": text,
-                "hex_preview": None,
                 "metadata": {"mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
             }
         return None

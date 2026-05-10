@@ -1,5 +1,7 @@
+# Windows 用户：pip install python-magic-bin
+# Linux/macOS 用户：sudo apt install libmagic1 / brew install libmagic
 python-magic==0.4.27
-python-magic-bin==0.4.14
+python-magic-bin==0.4.14 ; sys_platform == "win32"
 pdfminer.six==20240706
 python-docx==1.1.2
 python-pptx==1.0.2
