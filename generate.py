@@ -12,9 +12,13 @@ and generates a single structured HTML file suitable for feeding to LLMs / AI to
 
 import os
 import sys
+import pathlib
 import argparse
 import logging
 from html import escape
+
+# Ensure the project root is on sys.path so the src package is always findable
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from src.parser.dispatcher import parse_file
 
@@ -87,7 +91,10 @@ def build_html(folder_path, max_chars=None):
             )
             break
 
-    file_count = len(articles)
+    # Build articles section and count actual file articles
+    articles_html = chr(10).join(articles)
+    file_count = articles_html.count('<article>')
+
     html = (
         "<!DOCTYPE html>\n"
         '<html lang="zh-CN">\n'
@@ -106,7 +113,7 @@ def build_html(folder_path, max_chars=None):
         f"  <p>来源：{escape(os.path.abspath(folder_path))}</p>\n"
         f"  <p>共 {file_count} 个文件，{total_chars} 字符</p>\n"
         f"  <hr>\n"
-        f"{chr(10).join(articles)}\n"
+        f"{articles_html}\n"
         "</body>\n"
         "</html>"
     )
