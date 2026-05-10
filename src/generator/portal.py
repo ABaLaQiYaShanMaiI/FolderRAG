@@ -3,6 +3,8 @@ FolderRAG Portal - 智能分页知识门户生成器
 
 将文件夹中的文档解析为「可搜索的知识门户」：
 - 每个文档生成一个独立 HTML 页面（控制在 ~8000 字符以内）
+- 超大文档自动拆分为多个页面，带「上一页/下一页」导航
+- 不支持的文档类型生成占位页面，内容为「该文件类型不支持解析」
 - index.html 作为总入口，带搜索框、关键词云、文档卡片
 - 适合在 Edge Copilot 中打开，让 AI 完整读取每个页面
 """
@@ -14,7 +16,7 @@ from datetime import datetime
 from collections import Counter
 
 from src.parser.dispatcher import parse_file
-from src.generator.templates import wrap_doc_html, wrap_index_html
+from src.generator.templates import wrap_doc_html, wrap_index_html, wrap_skipped_html
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +138,7 @@ def split_large_text(text: str, max_chars: int = 8000) -> list:
     """
     将大文本拆分为多个片段，每个片段不超过 max_chars 字符。
     返回 [(part1, part1_title), (part2, part2_title), ...]
+    part1_title 对第一部分为 None，其余部分为章节标题或 "Part N"
     """
     if len(text) <= max_chars:
         return [(text, None)]
@@ -159,9 +162,12 @@ def split_large_text(text: str, max_chars: int = 8000) -> list:
         if current_len + para_len > max_chars and current_part:
             # Save current part
             combined = '\n\n'.join(current_part)
-            title_suffix = "(第%d部分)" % part_num if part_num > 1 else ""
-            subtitle = " - %s" % section_titles[part_num-1] if part_num <= len(section_titles) else ""
-            parts.append((combined, "Part %d%s%s" % (part_num, subtitle, title_suffix) if part_num > 1 else None))
+            # Generate part title
+            subtitle = ""
+            if part_num <= len(section_titles):
+                subtitle = " - %s" % section_titles[part_num - 1]
+            part_title = "Part %d%s" % (part_num, subtitle)
+            parts.append((combined, part_title))
             current_part = [para]
             current_len = para_len
             part_num += 1
@@ -169,7 +175,7 @@ def split_large_text(text: str, max_chars: int = 8000) -> list:
             current_part.append(para)
             current_len += para_len
 
-    # Last part
+    # Last part - if it's the only part after splitting, no special title
     if current_part:
         combined = '\n\n'.join(current_part)
         parts.append((combined, None))
@@ -270,20 +276,53 @@ def generate_portal(
             error_count += 1
             continue
 
+        # Get file timestamps for metadata
+        try:
+            mtime = os.path.getmtime(full_path)
+            ctime = os.path.getctime(full_path)
+            mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+            ctime_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            mtime_str = ""
+            ctime_str = ""
+
         if result is None:
             if show_progress:
                 print("\n  [跳过] %s (不支持的格式)" % rel_path)
-            if include_skipped:
-                # Get file timestamps for metadata
-                try:
-                    mtime = os.path.getmtime(full_path)
-                    ctime = os.path.getctime(full_path)
-                    mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-                    ctime_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M")
-                except Exception:
-                    mtime_str = ""
-                    ctime_str = ""
 
+            if include_skipped:
+                # Generate a placeholder HTML page for skipped files
+                skipped_safe_name = make_safe_filename(full_path, folder_path)
+                # Use "skipped_" prefix to differentiate from parsed files
+                skipped_file_name = "skipped_" + skipped_safe_name
+                skipped_path = os.path.join(docs_dir, skipped_file_name)
+
+                skipped_html = wrap_skipped_html(
+                    title=rel_path,
+                    folder_name=folder_name,
+                    file_size_hr=size_hr,
+                    filepath=full_path,
+                    index_link="../index.html",
+                    mtime=mtime_str,
+                    ctime=ctime_str,
+                )
+
+                with open(skipped_path, 'w', encoding='utf-8') as f:
+                    f.write(skipped_html)
+
+                docs_meta.append({
+                    "title": rel_path,
+                    "file": "docs/%s" % skipped_file_name,
+                    "size": 0,
+                    "size_hr": size_hr,
+                    "preview": "⏭️ 该文件类型不支持解析，已自动跳过",
+                    "tags": ["已跳过"],
+                    "skipped": True,
+                    "mtime": mtime_str,
+                    "ctime": ctime_str,
+                })
+            else:
+                # Only show marker on card, no detail page
                 docs_meta.append({
                     "title": rel_path,
                     "file": None,
@@ -303,32 +342,46 @@ def generate_portal(
             skipped_count += 1
             continue
 
-        # Get file timestamps for metadata
-        try:
-            mtime = os.path.getmtime(full_path)
-            ctime = os.path.getctime(full_path)
-            mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-            ctime_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M")
-        except Exception:
-            mtime_str = ""
-            ctime_str = ""
-
         # Handle large documents by splitting
         text_parts = split_large_text(text, max_chars_per_page)
 
+        # Generate safe base filename
+        safe_base = make_safe_filename(full_path, folder_path)
+        base_name, base_ext = os.path.splitext(safe_base)
+
+        # Pre-compute all filenames for this document
+        part_filenames = []
+        for part_idx in range(len(text_parts)):
+            if part_idx == 0:
+                fname = safe_base
+            else:
+                fname = "%s_part%d%s" % (base_name, part_idx + 1, base_ext)
+            part_filenames.append(fname)
+
+        # Generate each part with pagination navigation
         for part_idx, (part_text, part_title) in enumerate(text_parts):
             char_count = len(part_text)
             total_chars += char_count
 
-            # Build safe filename
-            safe_name = make_safe_filename(full_path, folder_path)
-            if part_idx > 0:
-                base, ext = os.path.splitext(safe_name)
-                safe_name = "%s_part%d%s" % (base, part_idx + 1, ext)
+            safe_name = part_filenames[part_idx]
 
+            # Build doc title
             doc_title = rel_path
             if part_title:
                 doc_title = "%s - %s" % (rel_path, part_title)
+
+            # Compute pagination links
+            total_parts = len(text_parts)
+            prev_page = None
+            next_page = None
+            page_info = None
+
+            if total_parts > 1:
+                page_info = "第 %d 页，共 %d 页" % (part_idx + 1, total_parts)
+                if part_idx > 0:
+                    prev_page = "docs/%s" % part_filenames[part_idx - 1]
+                if part_idx < total_parts - 1:
+                    next_page = "docs/%s" % part_filenames[part_idx + 1]
 
             # Generate individual HTML page
             page_html = wrap_doc_html(
@@ -340,6 +393,9 @@ def generate_portal(
                 index_link="../index.html",
                 mtime=mtime_str,
                 ctime=ctime_str,
+                prev_page=prev_page,
+                next_page=next_page,
+                page_info=page_info,
             )
 
             # Write to file
@@ -353,9 +409,16 @@ def generate_portal(
             # Preview (first 200 chars)
             preview = part_text[:200].replace('\n', ' ').strip()
 
-            # Add to metadata
+            # Build display title with page suffix if multi-page
+            display_title = doc_title
+            if total_parts > 1 and part_idx == 0:
+                display_title = "%s (第1页，共%d页)" % (rel_path, total_parts)
+            elif total_parts > 1:
+                display_title = "%s (第%d页)" % (rel_path, part_idx + 1)
+
+            # Add to metadata (only first part for index, or each part if multi-page)
             docs_meta.append({
-                "title": doc_title,
+                "title": display_title,
                 "file": "docs/%s" % safe_name,
                 "size": char_count,
                 "size_hr": size_hr,
@@ -369,7 +432,7 @@ def generate_portal(
 
         if len(text_parts) > 1:
             if show_progress:
-                print("\n  [拆分] %s -> 拆分为 %d 页" % (rel_path, len(text_parts)))
+                print("\n  [拆分] %s -> 拆分为 %d 页（带导航链接）" % (rel_path, len(text_parts)))
 
     # Newline after progress bar
     if show_progress:
