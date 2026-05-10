@@ -2,15 +2,11 @@
 Shared pytest fixtures for FolderRAG tests.
 """
 import os
-import sys
 import shutil
 import tempfile
 from pathlib import Path
 
 import pytest
-
-# Ensure we can import from src
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 @pytest.fixture(scope="function")

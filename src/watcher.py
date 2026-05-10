@@ -112,18 +112,26 @@ class FolderWatcher:
         self.embedder = embedder
         self.chunker = chunker
         self.vector_store = vector_store
+        self._observer = None
 
     def run(self):
         event_handler = FileChangeHandler(
             self.watch_dir, self.chunker, self.embedder, self.vector_store, self.config
         )
         observer = Observer()
+        self._observer = observer
         observer.schedule(event_handler, self.watch_dir, recursive=True)
         observer.start()
         logger.info(f"Started watching directory: {self.watch_dir}")
-        try:
-            # Keep the thread alive; watchdog's own threads will handle events
-            observer.join()
-        except KeyboardInterrupt:
-            observer.stop()
+        # observer.join() blocks the current thread; since this is called from
+        # a daemon thread in main.py, KeyboardInterrupt goes to the main thread (uvicorn),
+        # so the try/except here would never fire. Use observer.join() without
+        # catching KeyboardInterrupt - the observer stops when the process exits.
         observer.join()
+
+    def stop(self):
+        """Stop the observer. Called from the main thread on shutdown."""
+        if self._observer is not None:
+            self._observer.stop()
+            self._observer.join()
+            logger.info("Folder watcher stopped.")

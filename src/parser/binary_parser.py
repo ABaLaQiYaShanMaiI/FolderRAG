@@ -1,5 +1,9 @@
 import os
+import logging
 from binascii import hexlify
+
+logger = logging.getLogger(__name__)
+
 
 def parse_binary(filepath, config):
     try:
@@ -30,5 +34,6 @@ def parse_binary(filepath, config):
                 "hex_preview_length": len(hex_preview),
             },
         }
-    except Exception:
+    except Exception as e:
+        logger.exception("Failed to parse binary file %s: %s", filepath, e)
         return None

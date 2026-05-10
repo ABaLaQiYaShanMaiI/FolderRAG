@@ -28,10 +28,10 @@ class Chunker:
                 "offset": start,
                 "chunk_id": chunk_id,
             })
+            chunk_idx += 1
+            if end >= len(text):
+                break
             start = end - overlap  # overlap
             if start < 0:
                 start = 0  # safety
-            if end >= len(text):
-                break
-            chunk_idx += 1
         return chunks

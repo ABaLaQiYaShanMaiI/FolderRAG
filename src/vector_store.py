@@ -53,10 +53,8 @@ class VectorStore:
                 "modified_at": modified_at,
                 "extract_type": parsed_data.get("extract_type", "unknown"),
                 "mime": parsed_data.get("metadata", {}).get("mime", ""),
+                "hex_preview": parsed_data.get("hex_preview"),
             }
-            # NOTE: hex_preview is intentionally NOT stored in ChromaDB metadata
-            # because it can be very large (up to ~16KB base64-encoded).
-            # It should be read on-demand from the original file or stored in a KV store.
             metadatas.append(meta)
 
         embeddings = embedder.embed(texts)
@@ -73,11 +71,13 @@ class VectorStore:
         if not query_embeddings:
             return []
         query_embed = query_embeddings[0]
-        where = filters or {}
+        kwargs = {}
+        if filters:
+            kwargs["where"] = filters
         results = self.collection.query(
             query_embeddings=[query_embed],
             n_results=k,
-            where=where,
+            **kwargs,
             include=["metadatas", "documents", "distances"],
         )
         # Format output
@@ -92,6 +92,7 @@ class VectorStore:
                     "score": 1 - results["distances"][0][i],  # lower distance = higher similarity
                     "mime": results["metadatas"][0][i].get("mime", ""),
                     "extract_type": results["metadatas"][0][i].get("extract_type", ""),
+                    "hex_preview": results["metadatas"][0][i].get("hex_preview"),
                 })
         return output
 

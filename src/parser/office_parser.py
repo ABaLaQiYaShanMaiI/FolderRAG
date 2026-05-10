@@ -1,3 +1,8 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def parse_office(filepath, filetype):
     try:
         if filetype == "docx":
@@ -42,5 +47,6 @@ def parse_office(filepath, filetype):
                 "metadata": {"mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
             }
         return None
-    except Exception:
+    except Exception as e:
+        logger.exception("Failed to parse office file %s (type=%s): %s", filepath, filetype, e)
         return None

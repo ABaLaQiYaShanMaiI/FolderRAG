@@ -16,6 +16,7 @@ class SearchResult(BaseModel):
     score: float
     mime: Optional[str] = None
     extract_type: Optional[str] = None
+    hex_preview: Optional[str] = None
 
 
 class SearchResponse(BaseModel):
@@ -29,3 +30,4 @@ class DocResponse(BaseModel):
     offset: Optional[int] = None
     mime: Optional[str] = None
     extract_type: Optional[str] = None
+    hex_preview: Optional[str] = None

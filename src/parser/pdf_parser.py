@@ -1,4 +1,8 @@
+import logging
 from pdfminer.high_level import extract_text
+
+logger = logging.getLogger(__name__)
+
 
 def parse_pdf(filepath):
     try:
@@ -9,5 +13,6 @@ def parse_pdf(filepath):
             "hex_preview": None,
             "metadata": {"mime": "application/pdf"},
         }
-    except Exception:
+    except Exception as e:
+        logger.exception("Failed to parse PDF file %s: %s", filepath, e)
         return None

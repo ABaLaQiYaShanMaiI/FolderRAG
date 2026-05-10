@@ -20,8 +20,11 @@ RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Create watch folder at runtime
-ENV WATCH_DIR=./watch_folder
+# Create watch folder and ensure it's writable by the non-root user
+RUN mkdir -p /app/watch_folder && \
+    chown appuser:appuser /app/watch_folder
+
+ENV WATCH_DIR=/app/watch_folder
 
 EXPOSE 8000
 

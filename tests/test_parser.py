@@ -1,13 +1,6 @@
 """
 Tests for the parser module.
 """
-import os
-import sys
-from pathlib import Path
-
-# Ensure we can import from src
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 from src.parser import parse_file
 
 
