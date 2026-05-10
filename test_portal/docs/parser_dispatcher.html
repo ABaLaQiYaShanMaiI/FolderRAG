@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="copilot-reading-context" content="full">
+<title>parser\dispatcher.py — src</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 900px; margin: 0 auto; padding: 24px 20px;
+    background: #f8f9fa; color: #333; line-height: 1.7;
+  }
+  .nav-bar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px; padding-bottom: 12px;
+    border-bottom: 1px solid #e0e0e0; flex-wrap: wrap;
+  }
+  .nav-bar a {
+    color: #1a73e8; text-decoration: none; font-size: 0.9em;
+    padding: 4px 12px; border-radius: 4px; transition: background 0.2s;
+  }
+  .nav-bar a:hover { background: #e8f0fe; }
+  .nav-bar .title { font-size: 1.1em; font-weight: 600; color: #1a73e8; flex: 1; }
+  .doc-meta {
+    background: #e8f0fe; border-radius: 8px; padding: 10px 14px;
+    margin-bottom: 20px; font-size: 0.85em; color: #444;
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .doc-meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .doc-content {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+    padding: 20px; white-space: pre-wrap; word-break: break-word;
+    font-size: 0.95em; line-height: 1.7;
+  }
+  .copy-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; background: #1a73e8; color: white;
+    border: none; border-radius: 6px; cursor: pointer;
+    font-size: 0.85em; transition: background 0.2s;
+  }
+  .copy-btn:hover { background: #1557b0; }
+  .footer {
+    text-align: center; color: #999; font-size: 0.82em;
+    margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0;
+  }
+  .copilot-hint {
+    display: none;
+    /* Edge Copilot 读取提示：此页面为独立文档页，内容完整可读 */
+  }
+</style>
+</head>
+<body>
+<div class="nav-bar">
+  <span class="title">📄 parser\dispatcher.py</span>
+  <a href="../index.html">⬅ 返回首页</a>
+</div>
+
+<div class="doc-meta">
+  <span>📂 src</span>
+  <span>📏 大小：2.1 KB</span>
+  <span>📝 字符：2,052</span>
+  <span>
+    <button class="copy-btn" onclick="copyContent()">📋 复制全文</button>
+  </span>
+</div>
+
+<div class="doc-content" id="doc-content">import os
+import logging
+from .text_parser import parse_text
+from .pdf_parser import parse_pdf
+from .office_parser import parse_office
+
+logger = logging.getLogger(__name__)
+
+import magic
+_magic = magic.Magic(mime=True)
+
+
+def parse_file(filepath):
+    &quot;&quot;&quot;Dispatch a file to the appropriate parser based on MIME type.&quot;&quot;&quot;
+    if not os.path.isfile(filepath):
+        return None
+    mime = _magic.from_file(filepath)
+    if mime:
+        if mime.startswith(&quot;text/&quot;):
+            return parse_text(filepath, mime)
+        elif mime == &quot;application/pdf&quot;:
+            return parse_pdf(filepath)
+        elif mime in [
+            &quot;application/vnd.openxmlformats-officedocument.wordprocessingml.document&quot;,
+            &quot;application/msword&quot;,
+        ]:
+            if mime == &quot;application/msword&quot;:
+                logger.warning(
+                    &quot;Legacy .doc format detected: %s. python-docx cannot parse old .doc files. &quot;
+                    &quot;Consider converting to .docx.&quot;, filepath
+                )
+            return parse_office(filepath, &quot;docx&quot;)
+        elif mime in [
+            &quot;application/vnd.openxmlformats-officedocument.presentationml.presentation&quot;,
+            &quot;application/vnd.ms-powerpoint&quot;,
+        ]:
+            if mime == &quot;application/vnd.ms-powerpoint&quot;:
+                logger.warning(
+                    &quot;Legacy .ppt format detected: %s. python-pptx cannot parse old .ppt files. &quot;
+                    &quot;Consider converting to .pptx.&quot;, filepath
+                )
+            return parse_office(filepath, &quot;pptx&quot;)
+        elif mime in [
+            &quot;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&quot;,
+            &quot;application/vnd.ms-excel&quot;,
+        ]:
+            if mime == &quot;application/vnd.ms-excel&quot;:
+                logger.warning(
+                    &quot;Legacy .xls format detected: %s. openpyxl cannot parse old .xls files. &quot;
+                    &quot;Consider converting to .xlsx.&quot;, filepath
+                )
+            return parse_office(filepath, &quot;xlsx&quot;)
+    # Unsupported file type – skip silently
+    return None</div>
+
+<div class="footer">
+  <p>由 FolderRAG Portal 生成 | src</p>
+</div>
+
+<div class="copilot-hint">
+  ═══════════════════════════════
+  FolderRAG 知识页 | parser\dispatcher.py
+  文件大小：2.1 KB | 字符数：2052
+  索引位置：src/parser\dispatcher.py
+  ═══════════════════════════════
+</div>
+
+<script>
+function copyContent() {
+  const content = document.getElementById('doc-content');
+  const text = content.textContent || content.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => { btn.textContent = '📋 复制全文'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

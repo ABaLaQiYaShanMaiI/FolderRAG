@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="copilot-reading-context" content="full">
+<title>generator\templates.py — src</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 900px; margin: 0 auto; padding: 24px 20px;
+    background: #f8f9fa; color: #333; line-height: 1.7;
+  }
+  .nav-bar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px; padding-bottom: 12px;
+    border-bottom: 1px solid #e0e0e0; flex-wrap: wrap;
+  }
+  .nav-bar a {
+    color: #1a73e8; text-decoration: none; font-size: 0.9em;
+    padding: 4px 12px; border-radius: 4px; transition: background 0.2s;
+  }
+  .nav-bar a:hover { background: #e8f0fe; }
+  .nav-bar .title { font-size: 1.1em; font-weight: 600; color: #1a73e8; flex: 1; }
+  .doc-meta {
+    background: #e8f0fe; border-radius: 8px; padding: 10px 14px;
+    margin-bottom: 20px; font-size: 0.85em; color: #444;
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .doc-meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .doc-content {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+    padding: 20px; white-space: pre-wrap; word-break: break-word;
+    font-size: 0.95em; line-height: 1.7;
+  }
+  .copy-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; background: #1a73e8; color: white;
+    border: none; border-radius: 6px; cursor: pointer;
+    font-size: 0.85em; transition: background 0.2s;
+  }
+  .copy-btn:hover { background: #1557b0; }
+  .footer {
+    text-align: center; color: #999; font-size: 0.82em;
+    margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0;
+  }
+  .copilot-hint {
+    display: none;
+    /* Edge Copilot 读取提示：此页面为独立文档页，内容完整可读 */
+  }
+</style>
+</head>
+<body>
+<div class="nav-bar">
+  <span class="title">📄 generator\templates.py</span>
+  <a href="../index.html">⬅ 返回首页</a>
+</div>
+
+<div class="doc-meta">
+  <span>📂 src</span>
+  <span>📏 大小：13.3 KB</span>
+  <span>📝 字符：4,409</span>
+  <span>
+    <button class="copy-btn" onclick="copyContent()">📋 复制全文</button>
+  </span>
+</div>
+
+<div class="doc-content" id="doc-content">  /* Document Grid */
+  .doc-grid {{
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 12px;
+  }}
+  @media (max-width: 600px) {{
+    .doc-grid {{ grid-template-columns: 1fr; }}
+  }}
+
+  .doc-card {{
+    background: white; border: 1px solid #e0e0e0; border-radius: 10px;
+    padding: 14px 16px; transition: box-shadow 0.2s, opacity 0.2s;
+    opacity: 1;
+  }}
+  .doc-card.hidden {{ display: none; }}
+  .doc-card:hover {{ box-shadow: 0 2px 12px rgba(0,0,0,0.1); }}
+
+  .card-header {{
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  }}
+  .card-icon {{ font-size: 1.1em; }}
+  .card-title {{
+    font-weight: 600; color: #1a73e8; text-decoration: none;
+    word-break: break-all; font-size: 0.95em;
+  }}
+  .card-title:hover {{ text-decoration: underline; }}
+
+  .card-meta {{
+    font-size: 0.82em; color: #888; margin-bottom: 6px;
+    display: flex; gap: 12px;
+  }}
+
+  .card-preview {{
+    font-size: 0.88em; color: #555; line-height: 1.5;
+    margin-bottom: 8px; display: -webkit-box;
+    -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }}
+
+  .card-tags {{
+    display: flex; flex-wrap: wrap; gap: 4px;
+  }}
+  .tag {{
+    display: inline-block; padding: 1px 8px;
+    background: #f0f0f0; color: #666; border-radius: 10px;
+    font-size: 0.78em;
+  }}
+
+  .empty-state {{
+    text-align: center; padding: 40px 20px; color: #888;
+    display: none;
+  }}
+  .empty-state.visible {{ display: block; }}
+
+  .footer {{
+    text-align: center; color: #999; font-size: 0.82em;
+    margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0;
+  }}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+
+&lt;div class=&quot;portal-header&quot;&gt;
+  &lt;h1&gt;📁 {escaped_folder}&lt;/h1&gt;
+  &lt;div class=&quot;sub&quot;&gt;知识门户 — 从本地文件夹生成的可搜索文档库&lt;/div&gt;
+  &lt;div class=&quot;stats&quot;&gt;
+    &lt;span&gt;📄 文档数：{doc_count}&lt;/span&gt;
+    &lt;span&gt;📝 总字符：{total_chars:,}&lt;/span&gt;
+    &lt;span&gt;💾 总大小：{total_size_hr}&lt;/span&gt;
+    &lt;span&gt;🕐 生成时间：{escape(generated_at)}&lt;/span&gt;
+    &lt;span&gt;📂 {escaped_path}&lt;/span&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;div class=&quot;search-section&quot;&gt;
+  &lt;input type=&quot;text&quot; class=&quot;search-box&quot; id=&quot;searchInput&quot;
+         placeholder=&quot;🔍 搜索文档名称或内容... (支持拼音首字母)&quot;&gt;
+  &lt;div class=&quot;search-hint&quot;&gt;
+    💡 输入关键词快速过滤文档 &amp;nbsp;|&amp;nbsp; 点击文档标题在新标签页中打开
+    &amp;nbsp;|&amp;nbsp; 打开后按 Ctrl+Shift+. 唤醒 Edge Copilot 提问
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;div class=&quot;tag-cloud&quot;&gt;
+  &lt;div class=&quot;tag-cloud-title&quot;&gt;🏷️ 关键词标签（点击过滤）&lt;/div&gt;
+  &lt;div&gt;{tags_cloud_html}&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;div class=&quot;doc-grid&quot; id=&quot;docGrid&quot;&gt;
+  {cards_html}
+&lt;/div&gt;
+
+&lt;div class=&quot;empty-state&quot; id=&quot;emptyState&quot;&gt;
+  &lt;p&gt;😕 没有找到匹配的文档&lt;/p&gt;
+  &lt;p style=&quot;font-size:0.85em;margin-top:6px;&quot;&gt;试试其他关键词&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;div class=&quot;footer&quot;&gt;
+  &lt;p&gt;由 FolderRAG Portal 生成 | 共 {doc_count} 个文档，{total_chars:,} 字符 | {escape(generated_at)}&lt;/p&gt;
+&lt;/div&gt;
+
+&lt;script&gt;
+(function() {{
+  const searchInput = document.getElementById(&#x27;searchInput&#x27;);
+  const docGrid = document.getElementById(&#x27;docGrid&#x27;);
+  const emptyState = document.getElementById(&#x27;emptyState&#x27;);
+  const cards = docGrid.querySelectorAll(&#x27;.doc-card&#x27;);
+  const cloudTags = document.querySelectorAll(&#x27;.cloud-tag&#x27;);
+
+  // 搜索过滤
+  function filterDocs(query) {{
+    const q = query.toLowerCase().trim();
+    let visibleCount = 0;
+
+    cards.forEach(card =&gt; {{
+      const searchData = card.getAttribute(&#x27;data-search&#x27;) || &#x27;&#x27;;
+      const match = !q || searchData.includes(q);
+      card.classList.toggle(&#x27;hidden&#x27;, !match);
+      if (match) visibleCount++;
+    }});
+
+    emptyState.classList.toggle(&#x27;visible&#x27;, visibleCount === 0);
+  }}
+
+  // 实时搜索
+  searchInput.addEventListener(&#x27;input&#x27;, function() {{
+    cloudTags.forEach(t =&gt; t.classList.remove(&#x27;active&#x27;));
+    filterDocs(this.value);
+  }});
+
+  // 标签点击过滤
+  cloudTags.forEach(tag =&gt; {{
+    tag.addEventListener(&#x27;click&#x27;, function() {{
+      const tagText = this.getAttribute(&#x27;data-tag&#x27;) || this.textContent.trim();
+      cloudTags.forEach(t =&gt; t.classList.remove(&#x27;active&#x27;));
+      this.classList.add(&#x27;active&#x27;);
+      searchInput.value = tagText;
+      filterDocs(tagText);
+    }});
+  }});
+
+  // 回车触发搜索
+  searchInput.addEventListener(&#x27;keydown&#x27;, function(e) {{
+    if (e.key === &#x27;Enter&#x27;) {{
+      filterDocs(this.value);
+    }}
+  }});
+}})();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;&quot;&quot;&quot;
+
+
+def _format_total_size(docs_meta: list) -&gt; str:
+    &quot;&quot;&quot;计算所有文档的总大小并格式化为人类可读格式。&quot;&quot;&quot;
+    total = sum(d.get(&quot;size&quot;, 0) for d in docs_meta)
+    for unit in [&#x27;B&#x27;, &#x27;KB&#x27;, &#x27;MB&#x27;, &#x27;GB&#x27;]:
+        if total &lt; 1024:
+            return f&quot;{total:.1f} {unit}&quot;
+        total /= 1024
+    return f&quot;{total:.1f} TB&quot;</div>
+
+<div class="footer">
+  <p>由 FolderRAG Portal 生成 | src</p>
+</div>
+
+<div class="copilot-hint">
+  ═══════════════════════════════
+  FolderRAG 知识页 | generator\templates.py
+  文件大小：13.3 KB | 字符数：4409
+  索引位置：src/generator\templates.py
+  ═══════════════════════════════
+</div>
+
+<script>
+function copyContent() {
+  const content = document.getElementById('doc-content');
+  const text = content.textContent || content.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => { btn.textContent = '📋 复制全文'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="copilot-reading-context" content="full">
+<title>generator\portal.py — src</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 900px; margin: 0 auto; padding: 24px 20px;
+    background: #f8f9fa; color: #333; line-height: 1.7;
+  }
+  .nav-bar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px; padding-bottom: 12px;
+    border-bottom: 1px solid #e0e0e0; flex-wrap: wrap;
+  }
+  .nav-bar a {
+    color: #1a73e8; text-decoration: none; font-size: 0.9em;
+    padding: 4px 12px; border-radius: 4px; transition: background 0.2s;
+  }
+  .nav-bar a:hover { background: #e8f0fe; }
+  .nav-bar .title { font-size: 1.1em; font-weight: 600; color: #1a73e8; flex: 1; }
+  .doc-meta {
+    background: #e8f0fe; border-radius: 8px; padding: 10px 14px;
+    margin-bottom: 20px; font-size: 0.85em; color: #444;
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .doc-meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .doc-content {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+    padding: 20px; white-space: pre-wrap; word-break: break-word;
+    font-size: 0.95em; line-height: 1.7;
+  }
+  .copy-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; background: #1a73e8; color: white;
+    border: none; border-radius: 6px; cursor: pointer;
+    font-size: 0.85em; transition: background 0.2s;
+  }
+  .copy-btn:hover { background: #1557b0; }
+  .footer {
+    text-align: center; color: #999; font-size: 0.82em;
+    margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0;
+  }
+  .copilot-hint {
+    display: none;
+    /* Edge Copilot 读取提示：此页面为独立文档页，内容完整可读 */
+  }
+</style>
+</head>
+<body>
+<div class="nav-bar">
+  <span class="title">📄 generator\portal.py</span>
+  <a href="../index.html">⬅ 返回首页</a>
+</div>
+
+<div class="doc-meta">
+  <span>📂 src</span>
+  <span>📏 大小：10.3 KB</span>
+  <span>📝 字符：8,054</span>
+  <span>
+    <button class="copy-btn" onclick="copyContent()">📋 复制全文</button>
+  </span>
+</div>
+
+<div class="doc-content" id="doc-content">&quot;&quot;&quot;
+FolderRAG Portal — 智能分页知识门户生成器
+
+将文件夹中的文档解析为「可搜索的知识门户」：
+- 每个文档生成一个独立 HTML 页面（控制在 ~8000 字符以内）
+- index.html 作为总入口，带搜索框、关键词云、文档卡片
+- 适合在 Edge Copilot 中打开，让 AI 完整读取每个页面
+&quot;&quot;&quot;
+
+import os
+import re
+import logging
+from datetime import datetime
+from collections import Counter
+
+from src.parser.dispatcher import parse_file
+from src.generator.templates import wrap_doc_html, wrap_index_html
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+#  Utility functions
+# ============================================================
+
+def make_safe_filename(filepath: str, base_dir: str) -&gt; str:
+    &quot;&quot;&quot;
+    根据文件路径生成安全的 HTML 文件名。
+    例如：&#x27;技术文档/需求说明书.pdf&#x27; -&gt; &#x27;技术文档_需求说明书_pdf.html&#x27;
+    &quot;&quot;&quot;
+    # Get relative path
+    rel = os.path.relpath(filepath, base_dir)
+    # Remove extension
+    name, _ = os.path.splitext(rel)
+    # Replace unsafe chars
+    safe = re.sub(r&#x27;[&lt;&gt;:&quot;/\\|?*]&#x27;, &#x27;_&#x27;, name)
+    safe = re.sub(r&#x27;[. ]+&#x27;, &#x27;_&#x27;, safe)
+    safe = safe.strip(&#x27;_&#x27;)
+    if not safe:
+        safe = &quot;document&quot;
+    return f&quot;{safe}.html&quot;
+
+
+def human_readable_size(size_bytes: int) -&gt; str:
+    &quot;&quot;&quot;将字节数转换为人类可读格式。&quot;&quot;&quot;
+    for unit in [&#x27;B&#x27;, &#x27;KB&#x27;, &#x27;MB&#x27;, &#x27;GB&#x27;]:
+        if size_bytes &lt; 1024:
+            return f&quot;{size_bytes:.1f} {unit}&quot;
+        size_bytes /= 1024
+    return f&quot;{size_bytes:.1f} TB&quot;
+
+
+def extract_keywords(text: str, max_words: int = 8) -&gt; list:
+    &quot;&quot;&quot;
+    从文本中提取关键词标签。
+    使用简单的频率统计 + 长度过滤。
+    &quot;&quot;&quot;
+    # Chinese + English word pattern
+    chinese_chars = re.findall(r&#x27;[\u4e00-\u9fff]{2,6}&#x27;, text)
+    english_words = re.findall(r&#x27;\b[a-zA-Z]{3,15}\b&#x27;, text.lower())
+
+    # Filter common stop words
+    stop_words = {
+        &#x27;the&#x27;, &#x27;and&#x27;, &#x27;for&#x27;, &#x27;that&#x27;, &#x27;this&#x27;, &#x27;with&#x27;, &#x27;from&#x27;, &#x27;have&#x27;,
+        &#x27;are&#x27;, &#x27;was&#x27;, &#x27;were&#x27;, &#x27;been&#x27;, &#x27;being&#x27;, &#x27;has&#x27;, &#x27;had&#x27;, &#x27;does&#x27;,
+        &#x27;did&#x27;, &#x27;will&#x27;, &#x27;would&#x27;, &#x27;could&#x27;, &#x27;should&#x27;, &#x27;may&#x27;, &#x27;might&#x27;,
+        &#x27;about&#x27;, &#x27;into&#x27;, &#x27;over&#x27;, &#x27;after&#x27;, &#x27;before&#x27;, &#x27;between&#x27;,
+        &#x27;under&#x27;, &#x27;above&#x27;, &#x27;such&#x27;, &#x27;only&#x27;, &#x27;other&#x27;, &#x27;than&#x27;, &#x27;then&#x27;,
+        &#x27;also&#x27;, &#x27;very&#x27;, &#x27;just&#x27;, &#x27;more&#x27;, &#x27;some&#x27;, &#x27;these&#x27;, &#x27;those&#x27;,
+        &#x27;html&#x27;, &#x27;class&#x27;, &#x27;span&#x27;, &#x27;div&#x27;, &#x27;style&#x27;, &#x27;width&#x27;, &#x27;height&#x27;,
+    }
+
+    # Count frequency
+    counter = Counter()
+
+    for word in chinese_chars:
+        counter[word] += 1
+
+    for word in english_words:
+        if word not in stop_words and not word.isdigit():
+            counter[word] += 1
+
+    # Return most common words
+    keywords = [word for word, _ in counter.most_common(max_words)]
+    return keywords
+
+
+def split_large_text(text: str, max_chars: int = 8000) -&gt; list:
+    &quot;&quot;&quot;
+    将大文本拆分为多个片段，每个片段不超过 max_chars 字符。
+    返回 [(part1, part1_title), (part2, part2_title), ...]
+    &quot;&quot;&quot;
+    if len(text) &lt;= max_chars:
+        return [(text, None)]
+
+    # Split by paragraphs first
+    paragraphs = text.split(&#x27;\n\n&#x27;)
+    parts = []
+    current_part = []
+    current_len = 0
+    part_num = 1
+
+    # Find sections from markdown headings
+    section_titles = []
+    for line in text.split(&#x27;\n&#x27;):
+        m = re.match(r&#x27;^#{1,4}\s+(.+)$&#x27;, line.strip())
+        if m:
+            section_titles.append(m.group(1).strip())
+
+    for para in paragraphs:
+        para_len = len(para)
+        if current_len + para_len &gt; max_chars and current_part:
+            # Save current part
+            combined = &#x27;\n\n&#x27;.join(current_part)
+            title_suffix = f&quot;（第{part_num}部分）&quot; if part_num &gt; 1 else &quot;&quot;
+            # Try to find section title nearby
+            subtitle = f&quot; — {section_titles[part_num-1]}&quot; if part_num &lt;= len(section_titles) else &quot;&quot;
+            parts.append((combined, f&quot;Part {part_num}{subtitle}{title_suffix}&quot; if part_num &gt; 1 else None))
+            current_part = [para]
+            current_len = para_len
+            part_num += 1
+        else:
+            current_part.append(para)
+            current_len += para_len
+
+    # Last part
+    if current_part:
+        combined = &#x27;\n\n&#x27;.join(current_part)
+        parts.append((combined, None))
+
+    return parts
+
+
+# ============================================================
+#  Main portal generation
+# ============================================================
+
+def generate_portal(
+    folder_path: str,
+    output_dir: str,
+    max_chars_per_page: int = 8000,
+    include_skipped: bool = True,
+) -&gt; dict:
+    &quot;&quot;&quot;
+    将文件夹解析为可分页的知识门户。
+
+    参数：
+        folder_path: 要扫描的文件夹路径
+        output_dir: 输出目录路径
+        max_chars_per_page: 每个文档页面的最大字符数（默认8000）
+        include_skipped: 是否在首页中包含不支持的文档标记
+
+    返回：
+        dict: {
+            &quot;doc_count&quot;: 解析的文档数,
+            &quot;total_chars&quot;: 总字符数,
+            &quot;output_dir&quot;: 输出目录,
+            &quot;index_file&quot;: index.html 路径,
+            &quot;errors&quot;: 错误数,
+        }
+    &quot;&quot;&quot;
+    if not os.path.isdir(folder_path):
+        raise ValueError(f&quot;路径不是有效的文件夹：{folder_path}&quot;)
+
+    # Create output directory structure
+    docs_dir = os.path.join(output_dir, &quot;docs&quot;)
+    os.makedirs(docs_dir, exist_ok=True)
+
+    # Scan and parse all files
+    docs_meta = []
+    total_chars = 0
+    parsed_count = 0
+    skipped_count = 0
+    error_count = 0
+    folder_name = os.path.basename(os.path.abspath(folder_path))
+    now = datetime.now().strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
+
+    # Walk through folder
+    for dirpath, _, filenames in os.walk(folder_path):
+        for fname in filenames:
+            if fname.startswith(&#x27;.&#x27;):
+                continue
+            full_path = os.path.join(dirpath, fname)
+            if not os.path.isfile(full_path):
+                continue
+
+            rel_path = os.path.relpath(full_path, folder_path)
+            file_size = os.path.getsize(full_path)
+            size_hr = human_readable_size(file_size)
+
+            logger.info(&quot;Parsing: %s&quot;, rel_path)
+
+            try:
+                result = parse_file(full_path)
+            except Exception as e:
+                logger.exception(&quot;Error parsing %s: %s&quot;, rel_path, e)
+                error_count += 1
+                continue
+
+            if result is None:
+                logger.info(&quot;  -&gt; Skipped (unsupported type)&quot;)
+                if include_skipped:
+                    # Still add a placeholder entry
+                    docs_meta.append({
+                        &quot;title&quot;: rel_path,
+                        &quot;file&quot;: None,
+                        &quot;size&quot;: 0,
+                        &quot;size_hr&quot;: size_hr,
+                        &quot;preview&quot;: &quot;[不支持的格式，已跳过]&quot;,
+                        &quot;tags&quot;: [&quot;⏭️ 跳过&quot;],
+                        &quot;skipped&quot;: True,
+                    })
+                skipped_count += 1
+                continue
+
+            text = (result.get(&quot;text&quot;) or &quot;&quot;).strip()
+            if not text:
+                logger.info(&quot;  -&gt; Skipped (empty content)&quot;)
+                skipped_count += 1
+                continue
+
+            # Handle large documents by splitting
+            text_parts = split_large_text(text, max_chars_per_page)
+
+            for part_idx, (part_text, part_title) in enumerate(text_parts):
+                char_count = len(part_text)
+                total_chars += char_count
+
+                # Build safe filename
+                safe_name = make_safe_filename(full_path, folder_path)
+                if part_idx &gt; 0:
+                    # Append part number to filename
+                    base, ext = os.path.splitext(safe_name)
+                    safe_name = f&quot;{base}_part{part_idx + 1}{ext}&quot;
+
+                doc_title = rel_path
+                if part_title:
+                    doc_title = f&quot;{rel_path} — {part_title}&quot;
+
+                # Generate individual HTML page
+                page_html = wrap_doc_html(
+                    title=doc_title,
+                    text=part_text,
+                    folder_name=folder_name,
+                    char_count=char_count,
+                    file_size_hr=size_hr,
+                    index_link=&quot;../index.html&quot;,
+                )
+
+                # Write to file
+                doc_file_path = os.path.join(docs_dir, safe_name)
+                with open(doc_file_path, &#x27;w&#x27;, encoding=&#x27;utf-8&#x27;) as f:
+                    f.write(page_html)
+
+                # Extract keywords from content
+                keywords = extract_keywords(part_text)</div>
+
+<div class="footer">
+  <p>由 FolderRAG Portal 生成 | src</p>
+</div>
+
+<div class="copilot-hint">
+  ═══════════════════════════════
+  FolderRAG 知识页 | generator\portal.py
+  文件大小：10.3 KB | 字符数：8054
+  索引位置：src/generator\portal.py
+  ═══════════════════════════════
+</div>
+
+<script>
+function copyContent() {
+  const content = document.getElementById('doc-content');
+  const text = content.textContent || content.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => { btn.textContent = '📋 复制全文'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

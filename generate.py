@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """
-FolderRAG — Folder to Knowledge HTML Generator
+FolderRAG — Folder to Knowledge HTML / Portal Generator
 
 Usage:
+    # 传统模式：生成单个大 HTML 文件
     python generate.py <folder_path> -o <output.html>
     python generate.py <folder_path> -o <output.html> --max-chars 50000
 
+    # 🆕 门户模式：生成可搜索的分页知识门户（推荐 Edge Copilot 使用）
+    python generate.py <folder_path> --portal -o <output_dir/>
+    python generate.py <folder_path> --portal -o <output_dir/> --max-chars-per-page 8000
+
 Scans all files in a folder, parses documents (PDF, DOCX, PPTX, XLSX, TXT, etc.),
-and generates a single structured HTML file suitable for feeding to LLMs / AI tools.
+and generates:
+  - 传统模式：一个结构化 HTML 文件，适合直接喂给 LLM
+  - 门户模式：一组有索引 + 搜索的知识门户 HTML 页面，适合 Edge Copilot 完整消费
 """
 
 import os
@@ -21,6 +28,13 @@ from html import escape
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from src.parser.dispatcher import parse_file
+
+# Try to import portal generator
+try:
+    from src.generator.portal import generate_portal
+    HAS_PORTAL = True
+except ImportError:
+    HAS_PORTAL = False
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -122,15 +136,31 @@ def build_html(folder_path, max_chars=None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="FolderRAG — 将文件夹中的文档解析为结构化 HTML"
+        description="FolderRAG — 将文件夹中的文档解析为结构化 HTML 或分页知识门户"
     )
     parser.add_argument("folder", help="要扫描的文件夹路径")
-    parser.add_argument("-o", "--output", required=True, help="输出 HTML 文件路径")
+    parser.add_argument("-o", "--output", required=True, help="输出路径（文件或目录）")
     parser.add_argument(
         "--max-chars",
         type=int,
         default=None,
-        help="输出总字符数上限（默认不限）",
+        help="[传统模式] 输出总字符数上限（默认不限）",
+    )
+    parser.add_argument(
+        "--portal",
+        action="store_true",
+        help="[门户模式] 生成可搜索的分页知识门户（推荐 Edge Copilot 使用）",
+    )
+    parser.add_argument(
+        "--max-chars-per-page",
+        type=int,
+        default=8000,
+        help="[门户模式] 每页最大字符数（默认 8000，确保 Copilot 完整读取）",
+    )
+    parser.add_argument(
+        "--no-skipped",
+        action="store_true",
+        help="[门户模式] 不在首页中显示不支持的文档标记",
     )
     args = parser.parse_args()
 
@@ -138,13 +168,55 @@ def main():
         print(f"错误：路径不是有效的文件夹：{args.folder}", file=sys.stderr)
         sys.exit(1)
 
-    html = build_html(args.folder, max_chars=args.max_chars)
+    if args.portal:
+        # ── 门户模式 ──
+        if not HAS_PORTAL:
+            print("错误：门户模块不可用（src/generator/portal.py 未找到）", file=sys.stderr)
+            sys.exit(1)
 
-    with open(args.output, "w", encoding="utf-8") as f:
-        f.write(html)
+        output_dir = args.output
+        print(f"📁 正在生成知识门户到: {output_dir}")
+        print(f"📄 每页最大字符: {args.max_chars_per_page}")
+        print()
 
-    print(f"OK - 已生成知识文件: {args.output}")
-    print(f"    共包含 {html.count('<article>')} 个文件内容")
+        result = generate_portal(
+            folder_path=args.folder,
+            output_dir=output_dir,
+            max_chars_per_page=args.max_chars_per_page,
+            include_skipped=not args.no_skipped,
+        )
+
+        index_file = result.get("index_file")
+        if index_file and os.path.exists(index_file):
+            print("✅ 知识门户生成成功！")
+            print(f"   📂 输出目录: {result['output_dir']}")
+            print(f"   🏠 首页入口: {index_file}")
+            print(f"   📄 文档数量: {result['doc_count']}")
+            print(f"   📝 总字符数: {result['total_chars']:,}")
+            if result['skipped']:
+                print(f"   ⏭️ 跳过文件: {result['skipped']}")
+            if result['errors']:
+                print(f"   ❌ 错误文件: {result['errors']}")
+            print()
+            print("💡 使用提示：")
+            print("   1. 双击 index.html 在浏览器中打开")
+            print("   2. 搜索关键词找到目标文档")
+            print("   3. 点击文档标题在新标签页打开")
+            print("   4. 按 Ctrl+Shift+. 唤醒 Edge Copilot 提问")
+        else:
+            print("⚠️ 未生成任何文档（文件夹为空或所有文件都无法解析）", file=sys.stderr)
+            sys.exit(1)
+    else:
+        # ── 传统模式 ──
+        html = build_html(args.folder, max_chars=args.max_chars)
+
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(html)
+
+        print(f"OK - 已生成知识文件: {args.output}")
+        print(f"    共包含 {html.count('<article>')} 个文件内容")
+        print()
+        print("💡 提示：用 --portal 参数生成分页知识门户，可搜索且 Edge Copilot 友好")
 
 
 if __name__ == "__main__":
