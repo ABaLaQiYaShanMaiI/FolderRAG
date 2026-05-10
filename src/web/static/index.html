@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Folder to RAG - Knowledge Base Search</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { flex: 1; padding: 8px; }
+        button { padding: 8px 16px; cursor: pointer; }
+        .result-card { border: 1px solid #ddd; border-radius: 4px; padding: 15px; margin-bottom: 15px; }
+        .meta { font-size: 0.85em; color: #666; margin-bottom: 8px; display: flex; gap: 15px; }
+        .source { font-weight: bold; color: #333; }
+        .score { color: #2ecc71; }
+        .hex-preview pre { background: #f4f4f4; padding: 10px; font-family: monospace; font-size: 12px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>知识库搜索</h1>
+    <div class="search-box">
+        <input type="text" id="query" placeholder="输入搜索内容..." onkeydown="if(event.key==='Enter') search()">
+        <button onclick="search()">搜索</button>
+    </div>
+    <div id="results"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
