@@ -1,4 +1,4 @@
-# FolderRAG Desktop 🚀
+# DocPortal Desktop 🚀
 
 ## 快速开始
 
@@ -59,7 +59,7 @@ python generate.py "C:\你的文件夹" --portal -o ./portal_output
 
 ## 🏛️ 知识门户模式
 
-FolderRAG GUI 支持两种输出模式：
+DocPortal GUI 支持两种输出模式：
 
 ### 传统模式（单文件 HTML）
 生成单个大 HTML 文件，适合直接喂给 LLM（Claude / ChatGPT 等）。

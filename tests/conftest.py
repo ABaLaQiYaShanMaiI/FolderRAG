@@ -1,5 +1,5 @@
 """
-Shared pytest fixtures for FolderRAG tests.
+Shared pytest fixtures for DocPortal tests.
 """
 import os
 import tempfile

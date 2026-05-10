@@ -3,16 +3,16 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "FolderRAG"
+name = "DocPortal"
 version = "1.0.0"
-description = "📁 → 📄 文件夹转知识 HTML 导出工具：递归扫描本地文件夹，自动解析 PDF/Word/Excel/PPT/文本文件，生成结构化 HTML 文件供 AI/LLM 阅读"
+description = "📁 → 🌐 轻量离线文档门户：递归扫描本地文件夹，自动解析 PDF/Word/Excel/PPT/文本文件，生成可搜索的知识门户供浏览器 AI 阅读"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
 authors = [
-    {name = "FolderRAG Contributors"}
+    {name = "DocPortal Contributors"}
 ]
-keywords = ["document-parser", "pdf", "html-generator", "llm", "rag"]
+keywords = ["document-parser", "pdf", "html-generator", "knowledge-portal", "browser-ai", "offline"]
 
 dependencies = [
     "python-magic>=0.4.27",
@@ -30,7 +30,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ABaLaQiYaShanMaiI/FolderRAG"
+Homepage = "https://github.com/ABaLaQiYaShanMaiI/DocPortal"
 
 [tool.setuptools.packages.find]
 where = ["src"]

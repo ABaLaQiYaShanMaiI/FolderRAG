@@ -142,7 +142,7 @@ def build_html(folder_path, max_chars=None):
 
 def main():
     parser = argparse.ArgumentParser(
-    description="DocPortal - 将文件夹中的文档解析为结构化 HTML 或分页知识门户"
+        description="DocPortal - 将文件夹中的文档解析为结构化 HTML 或分页知识门户"
     )
     parser.add_argument("folder", help="要扫描的文件夹路径")
     parser.add_argument("-o", "--output", required=True, help="输出路径（文件或目录）")

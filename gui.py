@@ -61,13 +61,25 @@ def collect_files_info(root_dir):
     """Scan folder and return list of file info dicts."""
     file_list = []
     total_size = 0
-    supported_exts = {
-        '.txt', '.md', '.html', '.json', '.xml', '.csv', '.yaml', '.yml',
-        '.toml', '.ini', '.log', '.cfg', '.conf',
-        '.pdf', '.docx', '.pptx', '.xlsx',
-        '.py', '.js', '.ts', '.css', '.scss', '.less', '.java', '.cpp', '.h',
-        '.c', '.hpp', '.rb', '.go', '.rs', '.swift', '.kt', '.php', '.sh', '.bat',
-    }
+
+    # 使用与 dispatcher.py 一致的 MIME 检测（轻量级，不触发全文解析）
+    try:
+        import magic  # type: ignore[import-untyped]
+        _mime_checker = magic.Magic(mime=True)
+        SUPPORTED_MIME_PREFIXES = ('text/',)
+        SUPPORTED_MIME_EXACT = {
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/msword',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.ms-excel',
+        }
+    except Exception:
+        _mime_checker = None
+        SUPPORTED_MIME_PREFIXES = ()
+        SUPPORTED_MIME_EXACT = set()
 
     try:
         for dirpath, _, filenames in os.walk(root_dir):
@@ -80,7 +92,17 @@ def collect_files_info(root_dir):
                 rel_path = os.path.relpath(full_path, root_dir)
                 file_size = os.path.getsize(full_path)
                 ext = os.path.splitext(fname)[1].lower()
-                is_supported = ext in supported_exts
+                # 使用 MIME 类型判断（与 dispatcher.py 一致）
+                is_supported = False
+                if _mime_checker is not None:
+                    try:
+                        mime = _mime_checker.from_file(full_path)
+                        is_supported = (
+                            mime.startswith(SUPPORTED_MIME_PREFIXES)
+                            or mime in SUPPORTED_MIME_EXACT
+                        )
+                    except Exception:
+                        pass
 
                 file_list.append({
                     'path': full_path,
