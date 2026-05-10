@@ -4,9 +4,7 @@ Tests for the CLI (generate.py) — single HTML mode and portal mode.
 
 import os
 import sys
-import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
 # Ensure project root is on path
