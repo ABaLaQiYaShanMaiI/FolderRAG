@@ -6,11 +6,11 @@ from pathlib import Path
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 import threading
-from src.watcher import FolderWatcher
-from src.api.server import create_app
-from src.vector_store import VectorStore
-from src.embedder import Embedder
-from src.chunker import Chunker
+from watcher import FolderWatcher
+from api.server import create_app
+from vector_store import VectorStore
+from embedder import Embedder
+from chunker import Chunker
 from dotenv import load_dotenv
 import yaml
 import logging

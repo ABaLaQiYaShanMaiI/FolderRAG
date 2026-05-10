@@ -53,8 +53,10 @@ class VectorStore:
                 "modified_at": modified_at,
                 "extract_type": parsed_data.get("extract_type", "unknown"),
                 "mime": parsed_data.get("metadata", {}).get("mime", ""),
-                "hex_preview": parsed_data.get("hex_preview"),
+                "hex_preview": parsed_data.get("hex_preview") or "",
             }
+            # ChromaDB metadata does not accept None values; remove any None entries
+            meta = {k: v for k, v in meta.items() if v is not None}
             metadatas.append(meta)
 
         embeddings = embedder.embed(texts)

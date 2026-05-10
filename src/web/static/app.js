@@ -56,7 +56,10 @@ function formatHex(hexStr) {
       const code = parseInt(bytes[i].substr(j, 2), 16);
       ascii += (code >= 32 && code < 127) ? String.fromCharCode(code) : '.';
     }
-    result += `${(i*16).toString(16).padStart(8, '0')}  ${hexLine.padEnd(48)}  ${ascii}\n`;
+    // Use BigInt for safe address arithmetic on large files
+    const addr = BigInt(i) * 16n;
+    const addrHex = addr.toString(16).padStart(8, '0');
+    result += `${addrHex}  ${hexLine.padEnd(48)}  ${ascii}\n`;
   }
   return result;
 }

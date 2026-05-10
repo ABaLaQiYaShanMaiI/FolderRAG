@@ -56,3 +56,19 @@ def mock_config():
             "hex_preview_bytes": 100
         }
     }
+
+
+class FakeEmbedder:
+    """A lightweight stub that replaces the real Embedder in tests.
+    Returns zero vectors of dimension 384 (matching bge-small-zh-v1.5)."""
+    def __init__(self, config=None):
+        pass
+
+    def embed(self, texts):
+        return [[0.0] * 384 for _ in texts]
+
+
+@pytest.fixture(scope="function")
+def fake_embedder():
+    """Fixture that returns a FakeEmbedder instance instead of the real model."""
+    return FakeEmbedder()

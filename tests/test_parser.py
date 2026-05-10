@@ -1,7 +1,7 @@
 """
 Tests for the parser module.
 """
-from src.parser import parse_file
+from src.parser.dispatcher import parse_file
 
 
 def test_text_parser(sample_text_file, mock_config):

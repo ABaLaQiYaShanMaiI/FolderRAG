@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from parser import parse_file
+from parser.dispatcher import parse_file
 from embedder import Embedder
 from chunker import Chunker
 from vector_store import VectorStore

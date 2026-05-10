@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from ..schemas import SearchRequest, SearchResponse
-from src.vector_store import VectorStore
-from src.embedder import Embedder
-
-router = APIRouter()
+from vector_store import VectorStore
+from embedder import Embedder
 
 
 def create_search_router(vector_store: VectorStore, embedder: Embedder) -> APIRouter:
+    router = APIRouter()
+
     @router.post("/v1/search", response_model=SearchResponse)
     async def search(request: SearchRequest):
         try:
