@@ -72,6 +72,13 @@ def wrap_skipped_html(
     filepath: str, index_link: str = "../index.html",
     mtime: str = "", ctime: str = "",
 ) -> str:
+    """
+    Wrap skipped/unsupported file info into an HTML page template.
+
+    Note: This function is retained as a public API for potential external use;
+    the current portal generator does not generate skipped file pages, it only
+    shows skipped files in the file tree on the index page.
+    """
     escaped_title = escape(title)
     escaped_folder = escape(folder_name)
     escaped_filepath = escape(filepath)

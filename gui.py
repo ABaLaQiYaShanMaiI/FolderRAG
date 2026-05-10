@@ -137,9 +137,28 @@ class DocPortalUI:
 
     def set_lang(self, lang):
         if lang != self._lang:
+            # Save user settings before rebuild
+            saved_mode = self.mode_var.get() if hasattr(self, 'mode_var') else 'single'
+            saved_skip = self.skip_var.get() if hasattr(self, 'skip_var') else True
+            saved_max_chars = self.max_ch_var.get() if hasattr(self, 'max_ch_var') else '50000'
+            saved_perpage = self.perpage_var.get() if hasattr(self, 'perpage_var') else '8000'
+            saved_fname = self.fname_var.get() if hasattr(self, 'fname_var') else 'knowledge_export'
+            saved_output = self.out_var.get() if hasattr(self, 'out_var') else self.output_path
+            saved_pout = self.pout_var.get() if hasattr(self, 'pout_var') else os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_portal")
+
             self._lang = lang
             self._save_settings()
             self.build_all()
+
+            # Restore user settings after rebuild
+            self.mode_var.set(saved_mode)
+            self.skip_var.set(saved_skip)
+            self.max_ch_var.set(saved_max_chars)
+            self.perpage_var.set(saved_perpage)
+            self.fname_var.set(saved_fname)
+            self.out_var.set(saved_output)
+            self.pout_var.set(saved_pout)
+            self.on_mode_change()
 
     def _save_settings(self):
         import json
