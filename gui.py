@@ -11,17 +11,9 @@ import threading
 import logging
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from html import escape
-from datetime import datetime
 
 # Add project root to path
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-
-try:
-    from src.parser.dispatcher import parse_file
-    HAS_PARSER = True
-except ImportError:
-    HAS_PARSER = False
 
 # Try to import portal generator
 try:
@@ -30,239 +22,17 @@ try:
 except ImportError:
     HAS_PORTAL = False
 
+# Import business logic from gui_scanner
+from src.gui_scanner import (
+    collect_files_info,
+    build_html_from_files,
+    human_readable_size,
+    _,
+)
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
-
-
-# ============================================================
-#  Bilingual string helper
-# ============================================================
-
-def _(zh: str, en: str) -> str:
-    """Return bilingual label: 中文 / English"""
-    return f"{zh} / {en}"
-
-
-# ============================================================
-#  Folder scanning & HTML generation (adapted from generate.py)
-# ============================================================
-
-def human_readable_size(size_bytes):
-    """Convert bytes to human readable string."""
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} TB"
-
-
-def collect_files_info(root_dir):
-    """Scan folder and return list of file info dicts."""
-    file_list = []
-    total_size = 0
-
-    # 使用与 dispatcher.py 一致的 MIME 检测（轻量级，不触发全文解析）
-    # Fallback extensions when python-magic is unavailable (Linux/macOS without libmagic)
-    FALLBACK_EXTS = {
-        '.txt', '.md', '.html', '.htm', '.json', '.xml', '.csv',
-        '.yaml', '.yml', '.toml', '.ini', '.log', '.cfg', '.conf',
-        '.py', '.js', '.ts', '.css', '.sh', '.bat', '.ps1', '.rb',
-        '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.go', '.php',
-        '.pdf',
-        '.docx', '.pptx', '.xlsx',
-    }
-    try:
-        import magic  # type: ignore[import-untyped]
-        _mime_checker = magic.Magic(mime=True)
-        SUPPORTED_MIME_PREFIXES = ('text/',)
-        SUPPORTED_MIME_EXACT = {
-            'application/pdf',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/msword',
-            'application/vnd.ms-powerpoint',
-            'application/vnd.ms-excel',
-        }
-    except Exception:
-        _mime_checker = None
-        SUPPORTED_MIME_PREFIXES = ()
-        SUPPORTED_MIME_EXACT = set()
-
-    try:
-        for dirpath, _, filenames in os.walk(root_dir):
-            for fname in filenames:
-                if fname.startswith('.'):
-                    continue
-                full_path = os.path.join(dirpath, fname)
-                if not os.path.isfile(full_path):
-                    continue
-                rel_path = os.path.relpath(full_path, root_dir)
-                file_size = os.path.getsize(full_path)
-                ext = os.path.splitext(fname)[1].lower()
-                # 使用 MIME 类型判断（与 dispatcher.py 一致）
-                is_supported = False
-                if _mime_checker is not None:
-                    try:
-                        mime = _mime_checker.from_file(full_path)
-                        is_supported = (
-                            mime.startswith(SUPPORTED_MIME_PREFIXES)
-                            or mime in SUPPORTED_MIME_EXACT
-                        )
-                    except Exception:
-                        pass
-                else:
-                    # Fallback: extension-based detection (no libmagic available)
-                    is_supported = ext in FALLBACK_EXTS
-
-                file_list.append({
-                    'path': full_path,
-                    'rel_path': rel_path,
-                    'size': file_size,
-                    'size_hr': human_readable_size(file_size),
-                    'ext': ext,
-                    'supported': is_supported,
-                })
-                total_size += file_size
-    except Exception as e:
-        logger.error(f"Error scanning folder: {e}")
-
-    return file_list, total_size
-
-
-def build_html_from_files(
-    folder_path,
-    file_list,
-    output_path,
-    max_chars=None,
-    include_skipped=True,
-):
-    """Parse files and generate HTML content."""
-    articles = []
-    total_chars = 0
-    hit_limit = False
-    parsed_count = 0
-    skipped_count = 0
-    error_count = 0
-
-    for finfo in file_list:
-        if hit_limit:
-            break
-
-        if not finfo['supported']:
-            if include_skipped:
-                escaped_path = escape(finfo['rel_path'])
-                escaped_size = escape(finfo['size_hr'])
-                article = (
-                    f"  <article class=\"skipped\">\n"
-                    f"    <h2>⏭️ {escaped_path}</h2>\n"
-                    f"    <p class=\"meta\">{_('类型不支持', 'Unsupported')} | {_('大小', 'Size')}：{escaped_size}</p>\n"
-                    f"  </article>"
-                )
-                articles.append(article)
-            skipped_count += 1
-            continue
-
-        try:
-            if not HAS_PARSER:
-                # Fallback: read as text
-                with open(finfo['path'], 'r', encoding='utf-8', errors='replace') as f:
-                    text = f.read()
-            else:
-                result = parse_file(finfo['path'])
-                if result is None:
-                    skipped_count += 1
-                    continue
-                text = (result.get("text") or "").strip()
-
-            if not text:
-                skipped_count += 1
-                continue
-
-            file_chars = len(text)
-            if max_chars is not None and total_chars + file_chars > max_chars:
-                allowed = max_chars - total_chars
-                if allowed <= 0:
-                    break
-                text = text[:allowed]
-                hit_limit = True
-
-            escaped_text = escape(text)
-            escaped_path = escape(finfo['rel_path'])
-            escaped_size = escape(finfo['size_hr'])
-            article = (
-                f"  <article>\n"
-                f"    <h2>📄 {escaped_path}</h2>\n"
-                f"    <p class=\"meta\">{_('大小', 'Size')}：{escaped_size} | {_('内容', 'Content')}：{file_chars} {_('字符', 'chars')}</p>\n"
-                f"    <p>{escaped_text}</p>\n"
-                f"  </article>"
-            )
-            articles.append(article)
-            total_chars += len(text)
-            parsed_count += 1
-
-        except Exception:
-            error_count += 1
-            continue
-
-        if hit_limit:
-            articles.append(
-                f"  <!-- {_('已达到 --max-chars 限制（', 'Reached --max-chars limit (')}{max_chars}{_(' 字符），后续文件已截断', ' chars), remaining files truncated')} -->"
-            )
-            break
-
-    articles_html = "\n".join(articles)
-    file_count = parsed_count
-    folder_name = escape(os.path.basename(os.path.abspath(folder_path)))
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    html = (
-        "<!DOCTYPE html>\n"
-        '<html lang="zh-CN">\n'
-        "<head>\n"
-        '<meta charset="UTF-8">\n'
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-        f"<title>{_('知识导出', 'Knowledge Export')} - {folder_name}</title>\n"
-        "<style>\n"
-        "  * { margin: 0; padding: 0; box-sizing: border-box; }\n"
-        "  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; "
-        "max-width: 960px; margin: 0 auto; padding: 20px; background: #f8f9fa; color: #333; }\n"
-        "  .header { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; "
-        "box-shadow: 0 2px 8px rgba(0,0,0,0.08); }\n"
-        "  .header h1 { font-size: 1.5em; color: #1a73e8; margin-bottom: 8px; }\n"
-        "  .header .meta { color: #666; font-size: 0.9em; line-height: 1.8; }\n"
-        "  .header .meta span { display: inline-block; margin-right: 16px; }\n"
-        "  article { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; "
-        "padding: 16px; margin-bottom: 12px; transition: box-shadow 0.2s; }\n"
-        "  article:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.1); }\n"
-        "  article.skipped { opacity: 0.6; background: #f5f5f5; }\n"
-        "  h2 { font-size: 1em; color: #1a73e8; margin-bottom: 6px; word-break: break-all; }\n"
-        "  .meta { color: #888; font-size: 0.82em; margin-bottom: 8px; }\n"
-        "  p { white-space: pre-wrap; word-break: break-word; font-size: 0.93em; line-height: 1.7; }\n"
-        "  hr { border: none; border-top: 1px solid #e0e0e0; margin: 16px 0; }\n"
-        "  .footer { text-align: center; color: #999; font-size: 0.85em; padding: 20px; }\n"
-        "</style>\n"
-        "</head>\n"
-        "<body>\n"
-        "  <div class=\"header\">\n"
-        f"    <h1>📁 {folder_name}</h1>\n"
-        "    <div class=\"meta\">\n"
-        f"      <span>📄 {_('文件数', 'Files')}：{file_count}</span>\n"
-        f"      <span>📝 {_('总字符', 'Total chars')}：{total_chars:,}</span>\n"
-        f"      <span>🕐 {_('导出时间', 'Exported')}：{now}</span>\n"
-        f"      <span>📂 {_('来源', 'Source')}：{escape(os.path.abspath(folder_path))}</span>\n"
-        "    </div>\n"
-        "  </div>\n"
-        f"{articles_html}\n"
-        "  <div class=\"footer\">\n"
-        f"    <p>{_('由 DocPortal Desktop 生成', 'Generated by DocPortal Desktop')} | {_('共', 'Total')} {file_count} {_('个文件', 'files')}，{total_chars:,} {_('字符', 'chars')}"
-        f" | {now}</p>\n"
-        "  </div>\n"
-        "</body>\n"
-        "</html>"
-    )
-    return html, parsed_count, skipped_count, error_count, total_chars
 
 
 # ============================================================

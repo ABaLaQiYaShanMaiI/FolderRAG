@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="copilot-reading-context" content="full">
+<meta name="color-scheme" content="light dark">
+<title>$escaped_title — $escaped_folder</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 900px; margin: 0 auto; padding: 24px 20px;
+    background: #f8f9fa; color: #333; line-height: 1.7;
+  }
+
+  /* Bilingual support — both languages visible by default */
+  .lang-en { color: #888; font-size: 0.92em; }
+  .lang-zh + .lang-en::before { content: ""; }
+
+  .breadcrumb {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.85em; color: #888; margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .breadcrumb a { color: #1a73e8; text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb .sep { color: #ccc; user-select: none; }
+
+  .nav-bar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px; padding-bottom: 12px;
+    border-bottom: 1px solid #e0e0e0; flex-wrap: wrap;
+  }
+  .nav-bar a {
+    color: #1a73e8; text-decoration: none; font-size: 0.9em;
+    padding: 4px 12px; border-radius: 4px; transition: background 0.2s;
+  }
+  .nav-bar a:hover { background: #e8f0fe; }
+  .nav-bar .title { font-size: 1.1em; font-weight: 600; color: #1a73e8; flex: 1; }
+  .doc-meta {
+    background: #e8f0fe; border-radius: 8px; padding: 10px 14px;
+    margin-bottom: 20px; font-size: 0.85em; color: #444;
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .doc-meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .doc-content {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+    padding: 20px; white-space: pre-wrap; word-break: break-word;
+    font-size: 0.95em; line-height: 1.7;
+  }
+  .copy-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; background: #1a73e8; color: white;
+    border: none; border-radius: 6px; cursor: pointer;
+    font-size: 0.85em; transition: background 0.2s;
+  }
+  .copy-btn:hover { background: #1557b0; }
+
+  /* Pagination */
+  .pagination {
+    display: flex; justify-content: center; align-items: center;
+    gap: 16px; margin-bottom: 20px; padding: 10px 0;
+    flex-wrap: wrap;
+  }
+  .page-nav {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 16px; background: #1a73e8; color: white;
+    text-decoration: none; border-radius: 6px;
+    font-size: 0.9em; transition: background 0.2s;
+  }
+  .page-nav:hover { background: #1557b0; }
+  .page-info {
+    font-size: 0.85em; color: #888;
+  }
+
+  .footer {
+    text-align: center; color: #999; font-size: 0.82em;
+    margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0;
+  }
+  .copilot-hint {
+    display: none;
+  }
+
+  /* Dark mode */
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a2e; color: #e0e0e0; }
+    .lang-en { color: #999; }
+    .nav-bar { border-bottom-color: #333; }
+    .nav-bar a:hover { background: #2a2a4e; }
+    .nav-bar .title { color: #64b5f6; }
+    .doc-meta { background: #2a2a4e; color: #ccc; }
+    .doc-content { background: #16213e; border-color: #333; color: #e0e0e0; }
+    .copy-btn { background: #1565c0; }
+    .copy-btn:hover { background: #1976d2; }
+    .page-nav { background: #1565c0; }
+    .page-nav:hover { background: #1976d2; }
+    .page-info { color: #888; }
+    .footer { border-top-color: #333; color: #666; }
+    .breadcrumb { color: #888; }
+    .breadcrumb a { color: #64b5f6; }
+    .breadcrumb .sep { color: #555; }
+  }
+
+  /* Print styles */
+  @media print {
+    body { background: white; color: black; padding: 0.5in; }
+    .nav-bar { border-bottom: 1px solid #ccc; }
+    .doc-meta { background: #f5f5f5; border: 1px solid #ddd; }
+    .doc-content { background: white; border: 1px solid #ddd; }
+    .copy-btn, .pagination { display: none; }
+    .footer { border-top: 1px solid #ccc; }
+  }
+</style>
+</head>
+<body>
+<div class="breadcrumb">
+  <a href="$index_link"><span class="lang-zh">首页</span><span class="lang-en">Home</span></a>
+  <span class="sep">›</span>
+  <span>$breadcrumb_name</span>
+</div>
+
+<div class="nav-bar">
+  <span class="title">📄 $escaped_title</span>
+  <a href="$index_link"><span class="lang-zh">⬅ 返回首页</span><span class="lang-en">⬅ Back</span></a>
+</div>
+
+$pagination_html
+
+<div class="doc-meta">
+  <span>📂 $escaped_folder</span>
+  <span>📏 <span class="lang-zh">大小</span><span class="lang-en">Size</span>：$file_size_hr</span>
+  <span>📝 <span class="lang-zh">字符</span><span class="lang-en">Chars</span>：$char_count</span>
+  $meta_lines
+  <span>
+    <button class="copy-btn" onclick="copyContent()">
+      <span class="lang-zh">📋 复制全文</span><span class="lang-en">📋 Copy All</span>
+    </button>
+  </span>
+</div>
+
+<div class="doc-content" id="doc-content">$escaped_text</div>
+
+$pagination_html_bottom
+
+<div class="footer">
+  <p><span class="lang-zh">由 DocPortal 生成</span><span class="lang-en">Generated by DocPortal</span> | $escaped_folder</p>
+</div>
+
+<div class="copilot-hint">
+  ═══════════════════════════════
+  DocPortal 知识页 / Knowledge Page | $escaped_title
+  文件大小 / File Size：$file_size_hr | 字符数 / Chars：$char_count_raw
+  索引位置 / Path：$escaped_folder/$escaped_title
+  ═══════════════════════════════
+</div>
+
+<script>
+function copyContent() {
+  const content = document.getElementById('doc-content');
+  const text = content.textContent || content.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '\u2705 Copied!';
+    setTimeout(() => {
+      btn.innerHTML = '<span class="lang-zh">\ud83d\udccb \u590d\u5236\u5168\u6587</span><span class="lang-en">\ud83d\udccb Copy All</span>';
+    }, 2000);
+  });
+}
+</script>
+</body>
+</html>
