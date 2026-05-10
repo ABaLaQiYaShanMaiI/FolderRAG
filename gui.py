@@ -63,6 +63,15 @@ def collect_files_info(root_dir):
     total_size = 0
 
     # 使用与 dispatcher.py 一致的 MIME 检测（轻量级，不触发全文解析）
+    # Fallback extensions when python-magic is unavailable (Linux/macOS without libmagic)
+    FALLBACK_EXTS = {
+        '.txt', '.md', '.html', '.htm', '.json', '.xml', '.csv',
+        '.yaml', '.yml', '.toml', '.ini', '.log', '.cfg', '.conf',
+        '.py', '.js', '.ts', '.css', '.sh', '.bat', '.ps1', '.rb',
+        '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.go', '.php',
+        '.pdf',
+        '.docx', '.pptx', '.xlsx',
+    }
     try:
         import magic  # type: ignore[import-untyped]
         _mime_checker = magic.Magic(mime=True)
@@ -103,6 +112,9 @@ def collect_files_info(root_dir):
                         )
                     except Exception:
                         pass
+                else:
+                    # Fallback: extension-based detection (no libmagic available)
+                    is_supported = ext in FALLBACK_EXTS
 
                 file_list.append({
                     'path': full_path,
