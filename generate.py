@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FolderRAG — Folder to Knowledge HTML / Portal Generator
+DocPortal — Folder to Knowledge HTML / Portal Generator
 
 Usage:
     # 传统模式：生成单个大 HTML 文件
@@ -142,7 +142,7 @@ def build_html(folder_path, max_chars=None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="FolderRAG - 将文件夹中的文档解析为结构化 HTML 或分页知识门户"
+    description="DocPortal - 将文件夹中的文档解析为结构化 HTML 或分页知识门户"
     )
     parser.add_argument("folder", help="要扫描的文件夹路径")
     parser.add_argument("-o", "--output", required=True, help="输出路径（文件或目录）")
@@ -181,8 +181,8 @@ def main():
             sys.exit(1)
 
         output_dir = args.output
-        print("[FolderRAG] 正在生成知识门户到: %s" % output_dir)
-        print("[FolderRAG] 每页最大字符: %d" % args.max_chars_per_page)
+        print("[DocPortal] 正在生成知识门户到: %s" % output_dir)
+        print("[DocPortal] 每页最大字符: %d" % args.max_chars_per_page)
         print()
 
         result = generate_portal(

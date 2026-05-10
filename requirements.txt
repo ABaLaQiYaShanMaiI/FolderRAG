@@ -1,5 +1,5 @@
 # ============================================================
-# FolderRAG — Dependencies
+# DocPortal — Dependencies
 # ============================================================
 # Document parsers
 pdfminer.six>=20221105
@@ -10,7 +10,8 @@ openpyxl>=3.1.2
 # Character encoding detection
 chardet>=5.0
 
-# Windows only: python-magic for MIME type detection
+# MIME type detection for all platforms
+python-magic>=0.4.27
 python-magic-bin>=0.4.14; platform_system == "Windows"
 
 # GUI dependencies

@@ -425,20 +425,6 @@ pip install pytest
 
 ---
 
-## 🤝 参与贡献 / Contributing
-
-欢迎提交 Issue 和 Pull Request / Issues and Pull Requests are welcome!
-
-1. Fork 本仓库 / Fork this repository
-2. 创建特性分支 (`git checkout -b feat/xxx`) / Create a feature branch
-3. 提交更改 (`git commit -m 'feat: add xxx'`) / Commit changes
-4. 推送到分支 (`git push origin feat/xxx`) / Push to branch
-5. 创建 Pull Request / Create a Pull Request
-
-> 代码风格 / Code style：请使用 `ruff` 进行 lint 检查 / Please use `ruff` for linting.
-
----
-
 ## 📄 许可证 / License
 
 本项目基于 **MIT License** 开源 — 详见 / See [LICENSE](LICENSE) 文件。

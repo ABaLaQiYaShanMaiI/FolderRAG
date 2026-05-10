@@ -1,5 +1,5 @@
 """
-FolderRAG Portal - 智能分页知识门户生成器
+DocPortal Portal - 智能分页知识门户生成器
 
 将文件夹中的文档解析为「可搜索的知识门户」：
 - 每个文档生成一个独立 HTML 页面（控制在 ~8000 字符以内）
@@ -35,7 +35,7 @@ def make_safe_filename(filepath: str, base_dir: str) -> str:
     # Remove extension
     name, _ = os.path.splitext(rel)
     # Replace unsafe chars
-    safe = re.sub(r'[<>:"/\\\\|?*]', '_', name)
+    safe = re.sub(r'[<>:"/\\|?*]', '_', name)
     safe = re.sub(r'[. ]+', '_', safe)
     safe = safe.strip('_')
     if not safe:
@@ -175,10 +175,14 @@ def split_large_text(text: str, max_chars: int = 8000) -> list:
             current_part.append(para)
             current_len += para_len
 
-    # Last part - if it's the only part after splitting, no special title
+    # Last part - give it a title too for consistency
     if current_part:
         combined = '\n\n'.join(current_part)
-        parts.append((combined, None))
+        subtitle = ""
+        if part_num <= len(section_titles):
+            subtitle = " - %s" % section_titles[part_num - 1]
+        part_title = "Part %d%s" % (part_num, subtitle)
+        parts.append((combined, part_title))
 
     return parts
 
@@ -379,9 +383,9 @@ def generate_portal(
             if total_parts > 1:
                 page_info = "第 %d 页，共 %d 页" % (part_idx + 1, total_parts)
                 if part_idx > 0:
-                    prev_page = "docs/%s" % part_filenames[part_idx - 1]
+                    prev_page = part_filenames[part_idx - 1]
                 if part_idx < total_parts - 1:
-                    next_page = "docs/%s" % part_filenames[part_idx + 1]
+                    next_page = part_filenames[part_idx + 1]
 
             # Generate individual HTML page
             page_html = wrap_doc_html(
