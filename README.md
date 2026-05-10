@@ -75,11 +75,11 @@ DocPortal is a "document express lane" designed specifically for browser sidebar
 | 🏛️ **知识门户 / Knowledge Portal** | 生成带搜索、关键词过滤、文档卡片的分页知识库 |
 | ⚡ **轻量无依赖 / Lightweight** | 无需数据库、无需向量模型、无需 Web 服务，纯 Python 脚本运行 |
 | 🌐 **跨平台 / Cross-platform** | Windows / macOS / Linux 均可运行 |
-| 🖥️ **图形界面 / GUI** | 提供 Tkinter 桌面 GUI，支持拖拽文件夹 |
+| 🖥️ **图形界面 / GUI** | 提供 Tkinter 桌面 GUI，支持拖拽文件夹、模式切换、快捷键 |
 | 🔤 **智能编码 / Smart Encoding** | 自动检测 UTF-8/GBK/Latin-1 编码，中文 Windows 友好 |
 | 🌙 **暗黑模式 / Dark Mode** | 门户页面自动跟随系统颜色方案 |
 | 🖨️ **打印友好 / Print-friendly** | 门户页面内置 @media print 样式 |
-| 🌐 **中英双语 UI / Bilingual UI** | 所有门户页面和 GUI 均同时显示中英文 / All portal pages & GUI show both Chinese and English |
+| 🌐 **中英双语 UI / Bilingual UI** | 所有门户页面和 GUI 均同时显示中英文 |
 
 ---
 
@@ -241,24 +241,50 @@ python generate.py "C:\Users\用户名\文档" -o docs.html
 
 ## 🖥️ 图形界面 / GUI
 
-DocPortal 提供图形界面，支持两种输出模式 / DocPortal provides a desktop GUI supporting both output modes:
+DocPortal 提供 Tkinter 桌面图形界面，支持两种输出模式：
 
 ```bash
 # 启动 GUI / Launch GUI
 python gui.py
+
+# 从命令行直接打开指定文件夹 / Open a folder directly from command line
+python gui.py "C:\你的文件夹路径"
 ```
 
-**GUI 功能 / GUI Features**：
-- 📂 点击浏览或拖拽选择文件夹 / Browse or drag-and-drop folder selection
-- 📋 文件列表展示（文件名、大小、是否支持解析）/ File list (name, size, parseable flag)
-- ⚙️ **输出模式切换**：单文件 HTML / 知识门户 / Output mode toggle: single HTML file / knowledge portal
-- 📝 自定义输出路径、文件名、最大字符数 / Custom output path, filename, max chars
-- 📏 门户模式下可设置每页字符数 / Per-page char limit in portal mode
-- 🚀 一键生成，进度条实时反馈 / One-click generate with progress bar
-- ✅ 生成完成后弹出详情报告 / Detailed report popup after generation
-- ⌨️ 快捷键支持（`Ctrl+O` 打开、`Ctrl+G` 生成等）/ Keyboard shortcuts
+### GUI 功能一览
 
-详见 / See [README_GUI.md](README_GUI.md)。
+| 功能 | 说明 |
+|------|------|
+| 📂 **文件夹选择** | 点击浏览或拖拽选择文件夹，快捷键 `Ctrl+O` 打开 |
+| 📋 **文件列表** | 展示文件名、大小、是否可解析，一目了然 |
+| ⚙️ **输出模式切换** | 单文件 HTML / 知识门户，快捷键 `Ctrl+H` / `Ctrl+P` |
+| 📝 **自定义输出** | 输出路径、文件名、最大字符数自由设置 |
+| 📏 **每页字符控制** | 门户模式下可设置每页字符数（默认 8000） |
+| 🚀 **一键生成** | 点击生成，进度条实时反馈，快捷键 `Ctrl+G` |
+| ✅ **结果报告** | 生成完成后弹出详情报告，可选择打开文件位置 |
+| ⌨️ **快捷键** | `Ctrl+O` 打开 / `Ctrl+G` 生成 / `Ctrl+S` 选择输出路径 / `Esc` 退出 |
+
+### 在 Edge Copilot 中阅读门户知识库
+
+1. 使用门户模式生成知识门户
+2. 双击 `index.html` 在 Edge 浏览器中打开
+3. 搜索关键词找到目标文档
+4. 点击文档标题进入详情页
+5. 按 `Ctrl+Shift+.` 唤醒 Edge Copilot
+6. Copilot 会自动读取当前页面内容，可直接提问
+
+### 推荐工作流
+
+```
+场景 1：给 Claude 喂本地知识
+扫描文件夹 → 传统模式生成 HTML → 粘贴到 Claude → 提问分析
+
+场景 2：Edge Copilot 知识库（推荐）
+扫描文件夹 → 门户模式生成 → Edge 打开 index.html → Ctrl+Shift+. 唤醒 Copilot → 提问分析
+
+场景 3：批量文档归档检索
+扫描文件夹 → 门户模式生成 → 搜索关键词 → 定位目标文档 → 复制全文使用
+```
 
 ---
 
@@ -334,7 +360,6 @@ DocPortal/
 ├── LICENSE                     ← 开源许可证 / License
 ├── pyproject.toml              ← 项目元数据（可 pip install 安装）/ Project metadata
 ├── README.md                   ← 本文件 / This file
-├── README_GUI.md               ← 桌面 GUI 使用说明 / GUI documentation
 ├── .gitignore                  ← Git 忽略规则 / Git ignore rules
 ├── .github/
 │   └── workflows/
