@@ -1,4 +1,6 @@
+import hashlib
 from typing import List, Dict, Any
+
 
 class Chunker:
     def __init__(self, config: dict):
@@ -13,18 +15,23 @@ class Chunker:
         overlap = self.overlap_tokens
         chunks = []
         start = 0
-        chunk_id = 0
+        chunk_idx = 0
         while start < len(text):
             end = start + chunk_size
             chunk_text = text[start:end]
+            # Use md5 hash of source + offset as chunk_id to avoid ChromaDB special char issues
+            raw_id = f"{source}:{chunk_idx}"
+            chunk_id = hashlib.md5(raw_id.encode("utf-8")).hexdigest()
             chunks.append({
                 "text": chunk_text,
                 "source": source,
                 "offset": start,
-                "chunk_id": f"{source}:{chunk_id}",
+                "chunk_id": chunk_id,
             })
             start = end - overlap  # overlap
-            if start < 0: start = 0 # safety
-            if end >= len(text): break
-            chunk_id += 1
+            if start < 0:
+                start = 0  # safety
+            if end >= len(text):
+                break
+            chunk_idx += 1
         return chunks

@@ -2,14 +2,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from vector_store import VectorStore
-from embedder import Embedder
-from .schemas import SearchRequest, SearchResponse, DocResponse
+from src.vector_store import VectorStore
+from src.embedder import Embedder
+from .routes.search import create_search_router
+from .routes.docs import create_docs_router
 import os
+
 
 def create_app(vector_store: VectorStore, embedder: Embedder) -> FastAPI:
     app = FastAPI(title="Folder to RAG API")
-    
+
     # CORS
     app.add_middleware(
         CORSMiddleware,
@@ -26,31 +28,20 @@ def create_app(vector_store: VectorStore, embedder: Embedder) -> FastAPI:
     async def root():
         index_path = os.path.join(static_dir, "index.html")
         if not os.path.exists(index_path):
-             return HTMLResponse(content="<h1>Index file not found</h1>")
+            return HTMLResponse(content="<h1>Index file not found</h1>")
         with open(index_path, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
 
-    @app.post("/v1/search", response_model=SearchResponse)
-    async def search(request: SearchRequest):
-        try:
-            results = vector_store.search(request.query, embedder, request.k, request.filters)
-            return {"results": results}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-
-    @app.get("/v1/doc/{doc_id}", response_model=DocResponse)
-    async def get_doc(doc_id: str):
-        doc = vector_store.get_document(doc_id)
-        if not doc:
-            raise HTTPException(status_code=404, detail="Document not found")
-        return doc
+    # Include routers
+    app.include_router(create_search_router(vector_store, embedder))
+    app.include_router(create_docs_router(vector_store))
 
     @app.get("/v1/stats")
     async def stats():
-        count = vector_store.collection.count()
+        count = vector_store.count()
         return {
             "doc_count": count,
-            "last_updated": "实时监控中..."
+            "last_updated": "实时监控中...",
         }
 
     @app.get("/health")

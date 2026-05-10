@@ -1,15 +1,16 @@
 import os
 import sys
+from pathlib import Path
 
 # Add src to python path to allow imports from other directories in src
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 import threading
-from watcher import FolderWatcher
-from api.server import create_app
-from vector_store import VectorStore
-from embedder import Embedder
-from chunker import Chunker
+from src.watcher import FolderWatcher
+from src.api.server import create_app
+from src.vector_store import VectorStore
+from src.embedder import Embedder
+from src.chunker import Chunker
 from dotenv import load_dotenv
 import yaml
 import logging
@@ -18,9 +19,13 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 load_dotenv()
 
+
 def load_config():
-    with open("config.yaml", "r", encoding="utf-8") as f:
+    # Use absolute path based on this file's location: src/main.py -> FolderRAG/config.yaml
+    config_path = Path(__file__).parent.parent / "config.yaml"
+    with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
 
 def main():
     config = load_config()
@@ -50,6 +55,7 @@ def main():
 
     import uvicorn
     uvicorn.run(app, host=host, port=port)
+
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,6 @@
 import os
 import hashlib
-import json
+import threading
 from pathlib import Path
 from datetime import datetime, timezone
 from watchdog.observers import Observer
@@ -13,9 +13,36 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class FileChangeHandler(FileSystemEventHandler):
+
+class DebouncedHandler:
+    """Mixin for debouncing file system events."""
+
+    def __init__(self, debounce_seconds: float = 1.0):
+        self._debounce_seconds = debounce_seconds
+        self._timers = {}
+        self._lock = threading.Lock()
+
+    def _debounce(self, filepath: str, callback):
+        """Delay processing of a file, resetting the timer on each call."""
+        with self._lock:
+            # Cancel existing timer for this filepath
+            if filepath in self._timers:
+                self._timers[filepath].cancel()
+            # Create a new timer
+            timer = threading.Timer(self._debounce_seconds, callback)
+            timer.daemon = True
+            self._timers[filepath] = timer
+            timer.start()
+
+    def _cleanup_timer(self, filepath: str):
+        with self._lock:
+            self._timers.pop(filepath, None)
+
+
+class FileChangeHandler(FileSystemEventHandler, DebouncedHandler):
     def __init__(self, watch_dir, chunker, embedder, vector_store, config):
-        super().__init__()
+        FileSystemEventHandler.__init__(self)
+        DebouncedHandler.__init__(self, debounce_seconds=1.0)
         self.watch_dir = watch_dir
         self.chunker = chunker
         self.embedder = embedder
@@ -24,26 +51,38 @@ class FileChangeHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         if not event.is_directory:
-            self.process_file(event.src_path)
+            self._debounce(event.src_path, lambda: self.process_file(event.src_path))
 
     def on_modified(self, event):
         if not event.is_directory:
-            self.process_file(event.src_path)
+            self._debounce(event.src_path, lambda: self.process_file(event.src_path))
 
     def process_file(self, filepath):
         try:
+            # Clean up the debounce timer entry
+            self._cleanup_timer(filepath)
+
             filepath = os.path.abspath(filepath)
             if not os.path.isfile(filepath):
                 return
-            # Check if file should be processed
             # Skip hidden files or system files
             if os.path.basename(filepath).startswith('.'):
                 return
             logger.info(f"Processing file: {filepath}")
+
+            # Compute file hash BEFORE parsing to check for duplicates
+            file_hash = self.hash_file(filepath)
+
+            # Check if this file content has already been indexed (hash dedup)
+            stored_hash = self.vector_store.get_file_hash(source=filepath)
+            if stored_hash == file_hash:
+                logger.info(f"Skipping {filepath}: content unchanged (hash: {file_hash[:8]}...)")
+                return
+
             parsed = parse_file(filepath, self.config)
             if not parsed:
                 return
-            file_hash = self.hash_file(filepath)
+
             modified_at = datetime.fromtimestamp(os.path.getmtime(filepath), tz=timezone.utc).isoformat()
             # Upsert with metadata
             self.vector_store.upsert_file(
@@ -64,6 +103,7 @@ class FileChangeHandler(FileSystemEventHandler):
             for chunk in iter(lambda: f.read(4096), b""):
                 hasher.update(chunk)
         return hasher.hexdigest()
+
 
 class FolderWatcher:
     def __init__(self, watch_dir, config, embedder, chunker, vector_store):

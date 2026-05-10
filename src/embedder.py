@@ -1,7 +1,11 @@
 import os
+import logging
 from typing import List
 from tenacity import retry, stop_after_attempt, wait_exponential
 import numpy as np
+
+logger = logging.getLogger(__name__)
+
 
 class Embedder:
     def __init__(self, config: dict):
@@ -13,8 +17,10 @@ class Embedder:
             from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer(self.model_name)
         elif self.backend == "deepseek":
-            # Not implemented yet, placeholder
-            pass
+            raise NotImplementedError(
+                "DeepSeek embedding backend is not yet implemented. "
+                "Please use 'local' backend or implement the API integration."
+            )
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
@@ -47,6 +53,10 @@ class Embedder:
         # Note: DeepSeek does not officially provide an embedding API yet.
         # This endpoint is a placeholder for future compatibility or custom proxy.
         # For production, consider using OpenAI-compatible APIs (e.g., text-embedding-3-small).
+        logger.warning(
+            "DeepSeek embedding API is experimental and may not work. "
+            "Consider using the 'local' backend instead."
+        )
         resp = requests.post(
             "https://api.deepseek.com/v1/embeddings",
             json=payload,

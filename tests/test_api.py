@@ -1,38 +1,54 @@
+"""
+Tests for the FastAPI server.
+"""
 import os
 import sys
-from fastapi.testclient import TestClient
+from pathlib import Path
+
 import pytest
+from fastapi.testclient import TestClient
 
 # Ensure we can import from src
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
-from api.server import create_app
-from vector_store import VectorStore
-from embedder import Embedder
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-@pytest.fixture
-def client():
-    # Mock config for tests
-    config = {
-        "vector_store": {"persist_directory": "./tmp_test_db"},
-        "embedder": {"backend": "local", "model_name": "BAAI/bge-small-zh-v1.5"}
-    }
+from src.api.server import create_app
+from src.vector_store import VectorStore
+from src.embedder import Embedder
+
+
+def test_health(temp_db_dir, mock_config):
+    config = mock_config
+    config["vector_store"]["persist_directory"] = temp_db_dir
     vs = VectorStore(config["vector_store"])
-    # We might need to mock or use a very small embedder for tests to run fast
-    # For now, let's assume local embedder is okay if environment is setup
     emb = Embedder(config["embedder"])
     app = create_app(vs, emb)
-    with TestClient(app) as c:
-        yield c
-    # Cleanup
-    import shutil
-    shutil.rmtree("./tmp_test_db", ignore_errors=True)
+    with TestClient(app) as client:
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok"}
 
-def test_health(client):
-    resp = client.get("/health")
-    assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
 
-def test_search_empty(client):
-    resp = client.post("/v1/search", json={"query": "test", "k": 3})
-    assert resp.status_code == 200
-    assert resp.json() == {"results": []}
+def test_search_empty(temp_db_dir, mock_config):
+    config = mock_config
+    config["vector_store"]["persist_directory"] = temp_db_dir
+    vs = VectorStore(config["vector_store"])
+    emb = Embedder(config["embedder"])
+    app = create_app(vs, emb)
+    with TestClient(app) as client:
+        resp = client.post("/v1/search", json={"query": "test", "k": 3})
+        assert resp.status_code == 200
+        assert resp.json() == {"results": []}
+
+
+def test_stats(temp_db_dir, mock_config):
+    config = mock_config
+    config["vector_store"]["persist_directory"] = temp_db_dir
+    vs = VectorStore(config["vector_store"])
+    emb = Embedder(config["embedder"])
+    app = create_app(vs, emb)
+    with TestClient(app) as client:
+        resp = client.get("/v1/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "doc_count" in data
+        assert data["doc_count"] >= 0

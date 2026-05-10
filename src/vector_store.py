@@ -1,11 +1,12 @@
 import chromadb
 from chromadb.config import Settings
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from embedder import Embedder
 from chunker import Chunker
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 class VectorStore:
     def __init__(self, config: dict):
@@ -16,16 +17,30 @@ class VectorStore:
         )
         self.collection = self.client.get_or_create_collection("documents")
 
+    def count(self) -> int:
+        """Return the total number of documents in the collection."""
+        return self.collection.count()
+
+    def get_file_hash(self, source: str) -> Optional[str]:
+        """Retrieve the stored file_hash for a given source, if any."""
+        results = self.collection.get(
+            where={"source": source},
+            limit=1,
+            include=["metadatas"],
+        )
+        if results and results["metadatas"]:
+            return results["metadatas"][0].get("file_hash")
+        return None
+
     def upsert_file(self, source, file_hash, modified_at, parsed_data, chunker: Chunker, embedder: Embedder):
         # Delete old chunks from this source first
         self.collection.delete(where={"source": source})
-        
+
         text = parsed_data.get("text", "")
         chunks = chunker.chunk_text(text, source)
         if not chunks:
-            # Even if no text, maybe we want to index hex_preview? For simplicity skip.
             return
-        
+
         texts = [chunk["text"] for chunk in chunks]
         ids = [chunk["chunk_id"] for chunk in chunks]
         metadatas = []
@@ -39,11 +54,11 @@ class VectorStore:
                 "extract_type": parsed_data.get("extract_type", "unknown"),
                 "mime": parsed_data.get("metadata", {}).get("mime", ""),
             }
-            # Add hex_preview if available (could be large, better store elsewhere)
-            if parsed_data.get("hex_preview"):
-                meta["hex_preview"] = parsed_data["hex_preview"]
+            # NOTE: hex_preview is intentionally NOT stored in ChromaDB metadata
+            # because it can be very large (up to ~16KB base64-encoded).
+            # It should be read on-demand from the original file or stored in a KV store.
             metadatas.append(meta)
-        
+
         embeddings = embedder.embed(texts)
         self.collection.add(
             ids=ids,
@@ -77,7 +92,6 @@ class VectorStore:
                     "score": 1 - results["distances"][0][i],  # lower distance = higher similarity
                     "mime": results["metadatas"][0][i].get("mime", ""),
                     "extract_type": results["metadatas"][0][i].get("extract_type", ""),
-                    "hex_preview": results["metadatas"][0][i].get("hex_preview"),
                 })
         return output
 
@@ -92,6 +106,5 @@ class VectorStore:
                 "offset": meta.get("offset"),
                 "mime": meta.get("mime"),
                 "extract_type": meta.get("extract_type"),
-                "hex_preview": meta.get("hex_preview"),
             }
         return None
