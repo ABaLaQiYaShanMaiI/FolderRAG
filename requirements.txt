@@ -7,3 +7,5 @@ python-docx==1.1.2
 python-pptx==1.0.2
 openpyxl==3.1.5
 beautifulsoup4==4.12.3
+charset-normalizer==3.4.1
+# pytest==8.3.5 ; 测试依赖，使用 pip install ".[dev]" 安装
