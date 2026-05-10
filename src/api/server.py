@@ -45,6 +45,14 @@ def create_app(vector_store: VectorStore, embedder: Embedder) -> FastAPI:
             raise HTTPException(status_code=404, detail="Document not found")
         return doc
 
+    @app.get("/v1/stats")
+    async def stats():
+        count = vector_store.collection.count()
+        return {
+            "doc_count": count,
+            "last_updated": "实时监控中..."
+        }
+
     @app.get("/health")
     async def health():
         return {"status": "ok"}

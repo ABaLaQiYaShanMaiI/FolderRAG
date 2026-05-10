@@ -1,28 +1,296 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <title>Folder to RAG - Knowledge Base Search</title>
-    <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
-        input { flex: 1; padding: 8px; }
-        button { padding: 8px 16px; cursor: pointer; }
-        .result-card { border: 1px solid #ddd; border-radius: 4px; padding: 15px; margin-bottom: 15px; }
-        .meta { font-size: 0.85em; color: #666; margin-bottom: 8px; display: flex; gap: 15px; }
-        .source { font-weight: bold; color: #333; }
-        .score { color: #2ecc71; }
-        .hex-preview pre { background: #f4f4f4; padding: 10px; font-family: monospace; font-size: 12px; overflow-x: auto; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FolderRAG 鈥?鏂囦欢澶圭煡璇嗗簱鎼滅储</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card-bg: #ffffff;
+    --text: #0f172a;
+    --subtext: #475569;
+    --border: #e2e8f0;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --success: #16a34a;
+    --warning: #d97706;
+    --radius: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .container {
+    width: 100%;
+    max-width: 900px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  h1 {
+    font-size: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .logo { font-size: 1.8rem; }
+  .status {
+    display: flex;
+    gap: 1.5rem;
+    background: var(--card-bg);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0% { opacity: 1 } 50% { opacity: 0.5 } 100% { opacity: 1 } }
+  .search-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .search-bar input {
+    flex: 1;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    background: var(--card-bg);
+  }
+  .search-bar input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
+  }
+  button {
+    padding: 0.8rem 1.8rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  button:hover { background: var(--accent-hover); }
+  .results-summary { margin: 1rem 0; color: var(--subtext); font-size: 0.9rem; }
+  .result-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+    transition: box-shadow 0.2s;
+  }
+  .result-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--subtext);
+    margin-bottom: 0.5rem;
+  }
+  .source {
+    font-weight: 600;
+    color: var(--text);
+  }
+  .score {
+    color: var(--success);
+    font-weight: 500;
+  }
+  .highlight {
+    background: #fef08a;
+    padding: 0 2px;
+    border-radius: 3px;
+  }
+  .hex-preview {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 0.8rem;
+    border-radius: 6px;
+    margin-top: 0.8rem;
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.8rem;
+    max-height: 200px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .hex-line {
+    display: flex;
+  }
+  .hex-offset { color: #94a3b8; margin-right: 1rem; min-width: 7rem; }
+  .hex-bytes { color: #7dd3fc; }
+  .hex-ascii { color: #fbbf24; margin-left: 1rem; }
+  footer {
+    margin-top: 3rem;
+    text-align: center;
+    color: var(--subtext);
+    font-size: 0.8rem;
+  }
+  @media (max-width: 600px) {
+    .status { flex-direction: column; gap: 0.3rem; }
+    button { padding: 0.8rem 1rem; }
+  }
+</style>
 </head>
 <body>
-    <h1>知识库搜索</h1>
-    <div class="search-box">
-        <input type="text" id="query" placeholder="输入搜索内容..." onkeydown="if(event.key==='Enter') search()">
-        <button onclick="search()">搜索</button>
+<div class="container">
+  <header>
+    <h1><span class="logo">馃搧</span> FolderRAG</h1>
+    <div class="status">
+      <div class="status-item"><span class="status-dot"></span> 绱㈠紩鏂囦欢: <strong id="docCount">---</strong></div>
+      <div class="status-item">馃晵 鏈€鍚庢洿鏂? <strong id="lastUpdate">---</strong></div>
     </div>
-    <div id="results"></div>
+  </header>
 
-    <script src="/static/app.js"></script>
+  <div class="search-bar">
+    <input type="text" id="queryInput" placeholder="杈撳叆鏌ヨ鍐呭锛屽'椤圭洰杩涘害'鎴?config.yaml'" autofocus
+           onkeypress="if(event.key==='Enter') performSearch()">
+    <button onclick="performSearch()">馃攳 鎼滅储</button>
+  </div>
+
+  <div id="resultsArea">
+    <p style="color: var(--subtext); text-align:center; padding: 2rem;">杈撳叆鍏抽敭璇嶅紑濮嬭涔夋悳绱?..</p>
+  </div>
+</div>
+<footer>FolderRAG 路 瀹炴椂鐩戞帶 路 鍚戦噺妫€绱?/footer>
+
+<script>
+  // ========== 閰嶇疆 ==========
+  const API_BASE = '';
+  const STATUS_REFRESH_MS = 5000;  // 姣?绉掑埛鏂扮储寮曠姸鎬?
+  // ========== 宸ュ叿鍑芥暟 ==========
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function highlightText(text, query) {
+    if (!query.trim()) return escapeHtml(text);
+    const escaped = escapeHtml(text);
+    const qWords = query.trim().split(/\s+/).filter(w => w.length > 0);
+    if (qWords.length === 0) return escaped;
+    const pattern = new RegExp(`(${qWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+    return escaped.replace(pattern, '<span class="highlight">$1</span>');
+  }
+
+  function formatHexPreview(hexStr) {
+    if (!hexStr) return '';
+    let html = '';
+    for (let i = 0; i < hexStr.length; i += 32) {  // 32 hex chars = 16 bytes per line
+      const lineHex = hexStr.substring(i, i+32);
+      const pairs = lineHex.match(/.{1,2}/g) || [];
+      const hexDisplay = pairs.join(' ');
+      let ascii = '';
+      for (const pair of pairs) {
+        const code = parseInt(pair, 16);
+        ascii += (code >= 32 && code < 127) ? String.fromCharCode(code) : '.';
+      }
+      html += `<div class="hex-line">
+        <span class="hex-offset">${(i/2).toString(16).padStart(8, '0')}</span>
+        <span class="hex-bytes">${hexDisplay.padEnd(47)}</span>
+        <span class="hex-ascii">|${ascii}|</span>
+      </div>`;
+    }
+    return html;
+  }
+
+  // ========== 鎼滅储 ==========
+  async function performSearch() {
+    const query = document.getElementById('queryInput').value.trim();
+    const resultsArea = document.getElementById('resultsArea');
+    if (!query) {
+      resultsArea.innerHTML = '<p style="color: var(--subtext); text-align:center;">璇疯緭鍏ユ煡璇㈠唴瀹?/p>';
+      return;
+    }
+    resultsArea.innerHTML = '<p style="text-align:center; color: var(--subtext);">鎼滅储涓?..</p>';
+    try {
+      const resp = await fetch('/v1/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, k: 5 })
+      });
+      const data = await resp.json();
+      const results = data.results || [];
+      if (results.length === 0) {
+        resultsArea.innerHTML = '<p style="text-align:center; color: var(--subtext);">鏈壘鍒扮浉鍏崇粨鏋?/p>';
+        return;
+      }
+      renderResults(results, query);
+    } catch (err) {
+      resultsArea.innerHTML = `<p style="color: red; text-align:center;">璇锋眰澶辫触: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderResults(results, query) {
+    const container = document.getElementById('resultsArea');
+    let html = `<div class="results-summary">鎵惧埌 <strong>${results.length}</strong> 鏉＄浉鍏崇墖娈?/div>`;
+    results.forEach(r => {
+      const textPreview = r.text ? r.text.substring(0, 400) : '';
+      html += `<div class="result-card">
+        <div class="meta">
+          <span class="source">馃搫 ${escapeHtml(r.source || '鏈煡')}</span>
+          <span>鍋忕Щ: ${r.offset ?? 0}</span>
+          <span class="score">鐩镐技搴? ${((r.score ?? 0) * 100).toFixed(1)}%</span>
+          <span>${escapeHtml(r.mime || '')}</span>
+        </div>
+        <p>${highlightText(textPreview, query)}${r.text && r.text.length > 400 ? '...' : ''}</p>`;
+      if (r.extract_type === 'binary' && r.hex_preview) {
+        html += `<div class="hex-preview">
+          <strong style="color:#cbd5e1;">馃敘 Hex 棰勮 (${Math.floor(r.hex_preview.length/2)} 瀛楄妭)</strong>
+          ${formatHexPreview(r.hex_preview.substring(0, 1024))}
+        </div>`;
+      }
+      html += `</div>`;
+    });
+    container.innerHTML = html;
+  }
+
+  // ========== 鐘舵€佸疄鏃跺埛鏂?==========
+  async function refreshStatus() {
+    try {
+      const resp = await fetch('/health');
+      if (!resp.ok) throw new Error('down');
+      // 鍋囪鍚庣鎻愪緵 /v1/stats 绔偣锛堟湭鏉ユ墿灞曪級锛岃繖閲屽厛鐢?health 妯℃嫙
+      // 瀹為檯椤圭洰涓綘鍙互娣诲姞涓€涓?/v1/stats 绔偣杩斿洖 docCount 鍜?lastUpdate
+      // 鐩墠绠€鍖栵細鏄剧ず鍦ㄧ嚎鐘舵€侊紝瀹氭椂鍣ㄧ户缁?      document.getElementById('docCount').textContent = '鍦ㄧ嚎';
+      document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+    } catch (e) {
+      document.getElementById('docCount').textContent = '绂荤嚎';
+      document.getElementById('lastUpdate').textContent = '鈥?;
+      document.querySelector('.status-dot').style.background = 'var(--warning)';
+    }
+  }
+
+  // 鍒濆鍖?  refreshStatus();
+  setInterval(refreshStatus, STATUS_REFRESH_MS);
+</script>
 </body>
 </html>
