@@ -5,10 +5,7 @@ Generates single-page knowledge portal with collapsible file contents.
 """
 
 import os
-import json
-import re
 from html import escape
-from typing import Optional
 
 _TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 _TEMPLATE_CACHE: dict[str, str] = {}
