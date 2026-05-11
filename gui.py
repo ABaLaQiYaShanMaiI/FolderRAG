@@ -61,8 +61,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'fname': 'Name:',
             'show_skip': 'Show unsupported',
             'out_dir': 'Output dir:',
-            'chars_page': 'Chars/page:',
-            'rec_8000': '(recommended 8000)',
             'gen_btn': 'Generate HTML',
             'gen_portal_btn': 'Generate Portal',
             'start_hint': 'Select a folder to start',
@@ -105,8 +103,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'fname': '文件名：',
             'show_skip': '显示不支持标记',
             'out_dir': '输出目录：',
-            'chars_page': '每页字符：',
-            'rec_8000': '(推荐8000)',
             'gen_btn': '生成 HTML',
             'gen_portal_btn': '生成门户',
             'start_hint': '请选择文件夹开始',
@@ -163,7 +159,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             saved_mode = self.mode_var.get() if hasattr(self, 'mode_var') else 'single'
             saved_skip = self.skip_var.get() if hasattr(self, 'skip_var') else True
             saved_max_chars = self.max_ch_var.get() if hasattr(self, 'max_ch_var') else '50000'
-            saved_perpage = self.perpage_var.get() if hasattr(self, 'perpage_var') else '8000'
             saved_fname = self.fname_var.get() if hasattr(self, 'fname_var') else 'knowledge_export'
             saved_output = self.out_var.get() if hasattr(self, 'out_var') else self.output_path
             saved_pout = self.pout_var.get() if hasattr(self, 'pout_var') else os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_portal")
@@ -175,7 +170,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self.mode_var.set(saved_mode)
             self.skip_var.set(saved_skip)
             self.max_ch_var.set(saved_max_chars)
-            self.perpage_var.set(saved_perpage)
             self.fname_var.set(saved_fname)
             self.out_var.set(saved_output)
             self.pout_var.set(saved_pout)
@@ -218,12 +212,9 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             return True
 
         actual_port = port
-        # allow_reuse_address: avoid "Only one usage" errors on Windows restart
         socketserver.TCPServer.allow_reuse_address = True
         for attempt in range(max_attempts):
             try:
-                # Use directory parameter (Python 3.7+) instead of os.chdir()
-                # SimpleHTTPRequestHandler serves files relative to given directory.
                 handler = lambda *args, **kwargs: http.server.SimpleHTTPRequestHandler(
                     *args, directory=directory, **kwargs
                 )
@@ -364,7 +355,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         folder_f.pack(fill=tk.X, pady=(0, 6))
         self.folder_drop_frame = folder_f
 
-        # Register drop target on root (TkinterDnD2)
         try:
             from tkinterdnd2 import DND_FILES
             self.root.drop_target_register(DND_FILES)
@@ -528,6 +518,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                        bg=self.COLORS['card'], selectcolor=self.COLORS['card']).pack(anchor=tk.W, pady=(2, 0))
 
         # Portal settings (hidden by default)
+        # Only output dir + port — no pagination settings
         self.portal_f = tk.Frame(self.set_f, bg=self.COLORS['card'])
         pr1 = tk.Frame(self.portal_f, bg=self.COLORS['card'])
         pr1.pack(fill=tk.X, pady=1)
@@ -545,20 +536,13 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         pr2 = tk.Frame(self.portal_f, bg=self.COLORS['card'])
         pr2.pack(fill=tk.X, pady=1)
 
-        # Port input
+        # Port input only
         tk.Label(pr2, text=self.tr('port_label'), font=('Segoe UI', 10),
                  bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
         self.port_var = tk.StringVar(value=str(self._server_port))
         port_entry = ttk.Entry(pr2, textvariable=self.port_var, width=8)
         port_entry.pack(side=tk.LEFT, padx=(4, 8))
         port_entry.bind('<FocusOut>', lambda e: self._save_port())
-
-        tk.Label(pr2, text=self.tr('chars_page'), font=('Segoe UI', 10),
-                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
-        self.perpage_var = tk.StringVar(value='8000')
-        ttk.Entry(pr2, textvariable=self.perpage_var, width=10).pack(side=tk.LEFT, padx=(4, 4))
-        tk.Label(pr2, text=self.tr('rec_8000'), font=('Segoe UI', 9),
-                 bg=self.COLORS['card'], fg=self.COLORS['text_secondary']).pack(side=tk.LEFT)
 
         tk.Checkbutton(self.portal_f, text=self.tr('show_skip'),
                        variable=self.skip_var, font=('Segoe UI', 10),
@@ -613,7 +597,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             command=self._stop_server,
             padx=10, pady=2
         )
-        # Initially hidden
         self.server_stop_btn.pack_forget()
         self.server_stop_btn.bind('<Enter>', lambda e: self.server_stop_btn.configure(bg='#d32f2f'))
         self.server_stop_btn.bind('<Leave>', lambda e: self.server_stop_btn.configure(bg=self.COLORS['error']))
@@ -633,7 +616,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.server_copy_btn.bind('<Enter>', lambda e: self.server_copy_btn.configure(bg=self.COLORS['primary_hover']))
         self.server_copy_btn.bind('<Leave>', lambda e: self.server_copy_btn.configure(bg=self.COLORS['primary']))
 
-        # Update UI based on current server state
         self._update_server_ui()
 
     def _on_server_start(self):
@@ -792,7 +774,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         if is_portal:
             self.portal_f.pack(fill=tk.X)
             self.gen_btn.config(text=self.tr('gen_portal_btn'))
-            self.status_var.set("Portal: separate pages with search" if self._lang == 'en' else "门户模式：独立页面，支持搜索")
+            self.status_var.set("Portal: single page with collapsible files + file tree" if self._lang == 'en' else "门户模式：单一页面，文件可折叠展开，带文件树导航")
         else:
             self.single_f.pack(fill=tk.X)
             self.gen_btn.config(text=self.tr('gen_btn'))
@@ -833,30 +815,26 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             if not out_dir:
                 messagebox.showerror("Error", "Set output directory")
                 return
-            pp = self.perpage_var.get().strip()
-            per_page = 8000
-            if pp:
-                try:
-                    per_page = int(pp)
-                    if per_page <= 0:
-                        per_page = 8000
-                except:
-                    messagebox.showerror("Error", "Invalid integer")
-                    return
             self._start_gen("Generating portal..." if self._lang == 'en' else "正在生成门户...")
+
             def task():
                 try:
-                    r = generate_portal(folder_path=self.current_folder, output_dir=out_dir,
-                                        max_chars_per_page=per_page, include_skipped=skip,
-                                        language=self._lang)
+                    r = generate_portal(
+                        folder_path=self.current_folder,
+                        output_dir=out_dir,
+                        include_skipped=skip,
+                        language=self._lang,
+                    )
                     self._server_root = r.get("output_dir", out_dir)
                     self.root.after(0, lambda: self._portal_done(r))
-                except Exception as e:
-                    self.root.after(0, lambda: self._gen_err(str(e)))
+                except Exception as e2:
+                    self.root.after(0, lambda e2=e2: self._gen_err(str(e2)))
+
             threading.Thread(target=task, daemon=True).start()
             self._sim_progress()
             return
 
+        # ---- Single HTML mode ----
         out = self.out_var.get().strip()
         if not out:
             messagebox.showerror("Error", "Set output path")
@@ -875,6 +853,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                 messagebox.showerror("Error", "Invalid integer")
                 return
         self._start_gen("Generating..." if self._lang == 'en' else "正在生成...")
+
         def task():
             try:
                 html, parsed, skipped, errors, chars = build_html_from_files(
@@ -884,8 +863,9 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                     f.write(html)
                 self.root.after(0, lambda: self.prog.config(value=100))
                 self.root.after(0, lambda: self._gen_done(out, parsed, skipped, errors, chars))
-            except Exception as e:
-                self.root.after(0, lambda: self._gen_err(str(e)))
+            except Exception as e2:
+                self.root.after(0, lambda e2=e2: self._gen_err(str(e2)))
+
         threading.Thread(target=task, daemon=True).start()
         self._sim_progress()
 
@@ -926,16 +906,15 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         od, idx = result["output_dir"], result.get("index_file", "")
         sk, er = result.get("skipped", 0), result.get("errors", 0)
         self.gen_btn.config(state='normal', text=self.tr('gen_portal_btn'), bg=self.COLORS['primary'])
-        st = (f"{self.tr('portal_done')} {dc} pages" + (f", {sk} skipped" if sk else "") +
+        st = (f"{self.tr('portal_done')} {dc} files" + (f", {sk} skipped" if sk else "") +
               (f", {er} errors" if er else "") + f" | {tc:,} chars")
         self.status_var.set(st)
         self.footer_var.set(f"OK {os.path.basename(od)}")
         self.dot.delete('all')
         self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
         hi = idx and os.path.exists(idx)
-        msg = f"Portal generated!\n\nOutput: {od}\nPages: {dc}\nSkipped: {sk}\nErrors: {er}\nChars: {tc:,}\n\n"
+        msg = f"Portal generated!\n\nOutput: {od}\nFiles: {dc}\nSkipped: {sk}\nErrors: {er}\nChars: {tc:,}\n\n"
 
-        # Ask whether to start server
         if hi:
             ask_msg = msg + self.tr('server_ask')
             if messagebox.askyesno("Success", ask_msg):

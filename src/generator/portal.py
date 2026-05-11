@@ -348,6 +348,8 @@ def generate_portal(
             "text": text,
             "size": char_count,
             "file_type": _get_file_type(rel_path),
+            "size_hr": size_hr,
+            "tags": keywords[:5],
         })
         parsed_count += 1
 
