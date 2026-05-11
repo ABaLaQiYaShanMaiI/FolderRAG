@@ -15,7 +15,7 @@ from datetime import datetime
 from collections import Counter
 
 from src.parser.dispatcher import parse_file
-from src.generator.templates import wrap_doc_html, wrap_index_html
+from src.generator.templates import wrap_doc_html, wrap_index_html, generate_sitemap_xml, generate_robots_txt
 
 logger = logging.getLogger(__name__)
 
@@ -103,17 +103,71 @@ def extract_keywords(text: str, max_words: int = 8) -> list:
     return keywords
 
 
-def split_large_text(text: str, max_chars: int = 8000) -> list:
-    """Split text into chunks of max_chars. Returns [(text, part_title)]."""
+def split_large_text(text: str, max_chars: int = 12000) -> list:
+    """Split text into chunks of max_chars. Prefers # heading boundaries.
+    Returns [(text, part_title)]."""
     if len(text) <= max_chars:
         return [(text, None)]
 
+    # First, try to split on Markdown headings (## or ###)
+    # We collect all heading positions and titles
+    heading_matches = list(re.finditer(r'^(#{1,4})\s+(.+)$', text, re.MULTILINE))
+
+    # If we have enough headings to make meaningful splits, use them
+    if heading_matches:
+        # Estimate: we want each chunk to be around max_chars
+        # Group headings into chunks
+        chunks = []
+        current_chunk_start = 0
+        current_heading_idx = 0
+
+        for i, match in enumerate(heading_matches):
+            heading_pos = match.start()
+            heading_level = len(match.group(1))
+            heading_title = match.group(2).strip()
+
+            # If this heading is far enough from the start of the current chunk,
+            # and we're not at the first heading, create a split point
+            if (heading_pos - current_chunk_start > max_chars * 0.8
+                    and current_chunk_start > 0):
+                # End this chunk at the previous heading
+                chunks.append((text[current_chunk_start:heading_pos].strip(),
+                               heading_title))
+                current_chunk_start = heading_pos
+                current_heading_idx = i
+
+        # Add remaining text as final chunk
+        remaining = text[current_chunk_start:].strip()
+        if remaining:
+            last_title = heading_matches[-1].group(2).strip() if heading_matches else ""
+            chunks.append((remaining, last_title))
+
+        # If we got 2+ chunks from heading-based splitting, use them
+        if len(chunks) >= 2:
+            # Check if any chunk is still too large and needs further splitting
+            final_chunks = []
+            for chunk_text, chunk_title in chunks:
+                if len(chunk_text) > max_chars * 1.5:
+                    # Need to sub-split this chunk by paragraphs
+                    sub_chunks = _split_by_paragraphs(chunk_text, max_chars, chunk_title)
+                    final_chunks.extend(sub_chunks)
+                else:
+                    final_chunks.append((chunk_text, chunk_title))
+            return final_chunks
+
+    # Fall back to paragraph-based splitting
+    return _split_by_paragraphs(text, max_chars)
+
+
+def _split_by_paragraphs(text: str, max_chars: int, base_title: str = None) -> list:
+    """Split text by paragraphs, falling back when heading-based split isn't sufficient."""
     paragraphs = text.split('\n\n')
     parts = []
     current_part = []
     current_len = 0
     part_num = 1
 
+    # Collect section titles for naming
     section_titles = []
     for line in text.split('\n'):
         m = re.match(r'^#{1,4}\s+(.+)$', line.strip())
@@ -125,9 +179,11 @@ def split_large_text(text: str, max_chars: int = 8000) -> list:
         if current_len + para_len > max_chars and current_part:
             combined = '\n\n'.join(current_part)
             subtitle = ""
-            if part_num <= len(section_titles):
+            if part_num <= len(section_titles) and not base_title:
                 subtitle = " - %s" % section_titles[part_num - 1]
             part_title = "Part %d%s" % (part_num, subtitle)
+            if base_title:
+                part_title = "%s - %s" % (base_title, part_title)
             parts.append((combined, part_title))
             current_part = [para]
             current_len = para_len
@@ -139,9 +195,11 @@ def split_large_text(text: str, max_chars: int = 8000) -> list:
     if current_part:
         combined = '\n\n'.join(current_part)
         subtitle = ""
-        if part_num <= len(section_titles):
+        if part_num <= len(section_titles) and not base_title:
             subtitle = " - %s" % section_titles[part_num - 1]
         part_title = "Part %d%s" % (part_num, subtitle)
+        if base_title:
+            part_title = "%s - %s" % (base_title, part_title)
         parts.append((combined, part_title))
 
     return parts
@@ -214,7 +272,7 @@ def build_file_tree_html(folder_path: str, docs_dir: str) -> str:
 def generate_portal(
     folder_path: str,
     output_dir: str,
-    max_chars_per_page: int = 8000,
+    max_chars_per_page: int = 12000,
     include_skipped: bool = True,
     show_progress: bool = True,
     language: str = "en",
@@ -343,6 +401,7 @@ def generate_portal(
                 if part_idx < total_parts - 1:
                     next_page = part_filenames[part_idx + 1]
 
+            keywords = extract_keywords(part_text)
             page_html = wrap_doc_html(
                 title=doc_title,
                 text=part_text,
@@ -355,13 +414,17 @@ def generate_portal(
                 prev_page=prev_page,
                 next_page=next_page,
                 page_info=page_info,
+                keywords=keywords,
+                rel_path=rel_path,
+                total_parts=total_parts,
+                part_idx=part_idx,
+                all_docs_meta=docs_meta,
             )
 
             doc_path = os.path.join(docs_dir, part_filenames[part_idx])
             with open(doc_path, 'w', encoding='utf-8') as f:
                 f.write(page_html)
 
-            keywords = extract_keywords(part_text)
             preview = part_text[:200].replace('\n', ' ').strip()
 
             if total_parts > 1 and part_idx == 0:
@@ -414,6 +477,21 @@ def generate_portal(
         index_path = None
         logger.warning("No documents parsed!")
 
+    # Generate sitemap.xml
+    if docs_meta:
+        sitemap_xml = generate_sitemap_xml(docs_meta)
+        sitemap_path = os.path.join(output_dir, "sitemap.xml")
+        with open(sitemap_path, 'w', encoding='utf-8') as f:
+            f.write(sitemap_xml)
+        logger.info("Sitemap: %s", sitemap_path)
+
+        # Generate robots.txt
+        robots_txt = generate_robots_txt()
+        robots_path = os.path.join(output_dir, "robots.txt")
+        with open(robots_path, 'w', encoding='utf-8') as f:
+            f.write(robots_txt)
+        logger.info("Robots.txt: %s", robots_path)
+
     return {
         "doc_count": parsed_count,
         "total_chars": total_chars,
@@ -422,4 +500,6 @@ def generate_portal(
         "output_dir": output_dir,
         "index_file": index_path,
         "folder_name": folder_name,
+        "sitemap_file": os.path.join(output_dir, "sitemap.xml") if docs_meta else None,
+        "robots_file": os.path.join(output_dir, "robots.txt") if docs_meta else None,
     }

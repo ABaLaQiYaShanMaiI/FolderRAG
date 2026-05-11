@@ -3,9 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="copilot-reading-context" content="full">
 <meta name="color-scheme" content="light dark">
+<meta name="copilot-reading-context" content="full">
+<meta name="description" content="$meta_description">
+<meta name="keywords" content="$meta_keywords">
+<meta name="document-source" content="$rel_path">
+<meta name="document-part" content="$page_info_num">
+<meta name="document-total-parts" content="$total_parts_str">
+<meta http-equiv="content-language" content="zh-CN, en">
+$og_meta_tags
+$twitter_meta_tags
+<base href="$base_href">
+<link rel="canonical" href="$canonical_url">
 <title>$escaped_title — $escaped_folder</title>
+$prev_next_links
+$json_ld_html
+$breadcrumb_json_ld
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -18,14 +31,14 @@
   .lang-en { color: #888; font-size: 0.92em; }
   .lang-zh + .lang-en::before { content: ""; }
 
-  .breadcrumb {
+  nav[aria-label="Breadcrumb"] {
     display: flex; align-items: center; gap: 6px;
     font-size: 0.85em; color: #888; margin-bottom: 8px;
     flex-wrap: wrap;
   }
-  .breadcrumb a { color: #1a73e8; text-decoration: none; }
-  .breadcrumb a:hover { text-decoration: underline; }
-  .breadcrumb .sep { color: #ccc; user-select: none; }
+  nav[aria-label="Breadcrumb"] a { color: #1a73e8; text-decoration: none; }
+  nav[aria-label="Breadcrumb"] a:hover { text-decoration: underline; }
+  nav[aria-label="Breadcrumb"] .sep { color: #ccc; user-select: none; }
 
   .nav-bar {
     display: flex; align-items: center; gap: 12px;
@@ -56,14 +69,145 @@
   }
   .doc-meta .copy-btn:hover { background: #1557b0; }
 
+  /* Reading progress bar */
+  .progress-bar-container {
+    width: 100%;
+    height: 4px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: #1a73e8;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  /* AI-friendly document summary section */
+  .doc-summary {
+    background: #f0f4ff;
+    border: 1px solid #d0d8f0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 0.85em;
+    color: #444;
+    line-height: 1.6;
+  }
+  .doc-summary .sum-title {
+    font-weight: 600;
+    color: #1a73e8;
+    margin-bottom: 6px;
+  }
+  .doc-summary .sum-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .doc-summary .sum-label {
+    color: #888;
+    font-weight: 500;
+    min-width: 60px;
+  }
+  .doc-summary .sum-keywords {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .doc-summary .sum-tag {
+    display: inline-block;
+    padding: 1px 8px;
+    background: #e0e8ff;
+    color: #1a73e8;
+    border-radius: 10px;
+    font-size: 0.9em;
+  }
+  .doc-summary .sum-text {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #d0d8f0;
+    color: #555;
+    line-height: 1.5;
+  }
+
+  /* Table of Contents */
+  .toc-container {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+  }
+  .toc-title {
+    font-weight: 600;
+    color: #1a73e8;
+    font-size: 0.9em;
+    margin-bottom: 8px;
+  }
+  .toc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .toc-list li {
+    padding: 2px 0;
+    font-size: 0.85em;
+  }
+  .toc-list a {
+    color: #1a73e8;
+    text-decoration: none;
+  }
+  .toc-list a:hover { text-decoration: underline; }
+  .toc-h2 { padding-left: 0; }
+  .toc-h3 { padding-left: 16px; }
+  .toc-h4 { padding-left: 32px; }
+
   .doc-content {
     background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
     padding: 24px; white-space: pre-wrap; word-break: break-word;
     font-size: 0.95em; line-height: 1.7;
   }
 
+  /* Related documents */
+  .related-docs {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+  }
+  .related-title {
+    font-weight: 600;
+    color: #1a73e8;
+    font-size: 0.9em;
+    margin-bottom: 8px;
+  }
+  .related-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .related-list li {
+    padding: 3px 0;
+    font-size: 0.85em;
+  }
+  .related-list a {
+    color: #1a73e8;
+    text-decoration: none;
+  }
+  .related-list a:hover { text-decoration: underline; }
+  .related-list .rel-score {
+    color: #999;
+    font-size: 0.85em;
+  }
+
   /* Pagination */
-  .pagination {
+  nav[aria-label="Pagination"] {
     display: flex; justify-content: center; align-items: center;
     gap: 16px; margin-bottom: 20px; padding: 10px 0;
     flex-wrap: wrap;
@@ -89,6 +233,9 @@
   @media (prefers-color-scheme: dark) {
     body { background: #1a1a2e; color: #e0e0e0; }
     .lang-en { color: #999; }
+    nav[aria-label="Breadcrumb"] { color: #888; }
+    nav[aria-label="Breadcrumb"] a { color: #64b5f6; }
+    nav[aria-label="Breadcrumb"] .sep { color: #555; }
     .nav-bar { border-bottom-color: #333; }
     .nav-bar .title { color: #64b5f6; }
     .nav-bar a { color: #64b5f6; }
@@ -96,14 +243,24 @@
     .doc-meta { background: #2a2a4e; color: #ccc; }
     .doc-meta .copy-btn { background: #1565c0; }
     .doc-meta .copy-btn:hover { background: #1976d2; }
+    .progress-bar-container { background: #333; }
+    .progress-bar-fill { background: #64b5f6; }
+    .doc-summary { background: #1a2640; border-color: #2a3a5a; color: #ccc; }
+    .doc-summary .sum-title { color: #64b5f6; }
+    .doc-summary .sum-tag { background: #2a3a5a; color: #64b5f6; }
+    .doc-summary .sum-text { border-top-color: #2a3a5a; color: #aaa; }
+    .toc-container { background: #1a1a2e; border-color: #333; }
+    .toc-title { color: #64b5f6; }
+    .toc-list a { color: #64b5f6; }
     .doc-content { background: #16213e; border-color: #333; color: #e0e0e0; }
+    .related-docs { background: #1a1a2e; border-color: #333; }
+    .related-title { color: #64b5f6; }
+    .related-list a { color: #64b5f6; }
+    .related-list .rel-score { color: #666; }
     .page-nav { background: #1565c0; }
     .page-nav:hover { background: #1976d2; }
     .page-info { color: #888; }
     .footer { border-top-color: #333; color: #666; }
-    .breadcrumb { color: #888; }
-    .breadcrumb a { color: #64b5f6; }
-    .breadcrumb .sep { color: #555; }
   }
 
   /* Print styles */
@@ -111,18 +268,21 @@
     body { background: white; color: black; padding: 0.5in; }
     .nav-bar { border-bottom: 1px solid #ccc; }
     .doc-meta { background: #f5f5f5; border: 1px solid #ddd; }
+    .doc-summary { background: #f5f5f5; border: 1px solid #ddd; }
+    .toc-container { display: none; }
     .doc-content { background: white; border: 1px solid #ddd; }
-    .doc-meta .copy-btn, .pagination { display: none; }
+    .related-docs { display: none; }
+    .doc-meta .copy-btn, nav[aria-label="Pagination"], .doc-summary { display: none; }
     .footer { border-top: 1px solid #ccc; }
   }
 </style>
 </head>
 <body>
-<div class="breadcrumb">
+<nav role="navigation" aria-label="Breadcrumb">
   <a href="$index_link"><span class="lang-zh">首页</span><span class="lang-en">Home</span></a>
   <span class="sep">›</span>
   <span>$breadcrumb_name</span>
-</div>
+</nav>
 
 <div class="nav-bar">
   <span class="title">📄 $escaped_title</span>
@@ -141,20 +301,46 @@ $pagination_html
   </button>
 </div>
 
-<div class="doc-content" id="doc-content">$escaped_text</div>
+$progress_bar_html
+
+$doc_summary_html
+
+$toc_html
+
+<main role="main">
+  <article itemscope itemtype="https://schema.org/Article">
+    <meta itemprop="name" content="$escaped_title">
+    <meta itemprop="description" content="$meta_description">
+    <meta itemprop="keywords" content="$meta_keywords">
+    <meta itemprop="dateModified" content="$mtime_iso">
+    <meta itemprop="inLanguage" content="zh-CN">
+    <div itemprop="articleBody" class="doc-content" id="doc-content">$escaped_text</div>
+  </article>
+</main>
 
 $pagination_html_bottom
 
-<div class="footer">
+$related_docs_html
+
+<footer role="contentinfo">
   <p><span class="lang-zh">由 FolderKnowledgeSiteGeneratorForAI 生成</span><span class="lang-en">Generated by FolderKnowledgeSiteGeneratorForAI</span> | $escaped_folder</p>
-</div>
+</footer>
 
 <div class="copilot-hint">
-  ═══════════════════════════════
-  FolderKnowledgeSiteGeneratorForAI 知识页 / Knowledge Page | $escaped_title
-  文件大小 / File Size: $file_size_hr | 字符数 / Chars: $char_count_raw
-  索引位置 / Path: $escaped_folder/$escaped_title
-  ═══════════════════════════════
+═══ FolderKnowledgeSiteGeneratorForAI Knowledge Page ═══
+Title: $escaped_title
+Source Path: $rel_path
+Original Folder: $escaped_folder
+File Type: $file_type
+File Size: $file_size_hr
+Characters: $char_count_raw
+Modified: $mtime_str
+Keywords: $meta_keywords
+Pagination: $page_info_full
+──────────────────────────────────────
+Content Summary (first 300 chars):
+$summary_300_escaped
+══════════════════════════════════════
 </div>
 
 <script>
