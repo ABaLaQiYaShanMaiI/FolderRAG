@@ -97,10 +97,10 @@ def _build_toc_html(text: str) -> str:
     return "\n".join(parts)
 
 
-def _build_doc_sitemap_html(all_docs_meta: list, current_title: str = "", index_link: str = "../index.html", max_items: int = 0) -> str:
+def _build_doc_sitemap_html(all_docs_meta: list, current_title: str = "", index_link: str = "../index.html", max_items: int | None = None) -> str:
     """Build a compact AI-readable sitemap for doc pages showing all documents.
     
-    If max_items > 0, only show up to that many items and indicate truncation.
+    If max_items is set, only show up to that many items and indicate truncation.
     """
     if not all_docs_meta:
         return ""
@@ -108,11 +108,11 @@ def _build_doc_sitemap_html(all_docs_meta: list, current_title: str = "", index_
     items = [d for d in all_docs_meta if not d.get("skipped") and d.get("file")]
     total_count = len(items)
     truncated = False
-    if max_items > 0 and len(items) > max_items:
+    if max_items is not None and len(items) > max_items:
         items = items[:max_items]
         truncated = True
     parts.append('<nav id="sitemap" aria-label="Document Index" style="margin-top:20px;padding:12px 16px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:8px;font-size:0.82em;">')
-    parts.append(f'<div style="font-weight:600;color:#1a73e8;margin-bottom:6px;">📑 Document Index ({total_count} pages{", showing first " + str(max_items) if truncated else ""})</div>')
+    parts.append(f'<div style="font-weight:600;color:#1a73e8;margin-bottom:6px;">📑 Document Index ({total_count} pages{f", showing first {max_items}" if truncated else ""})</div>')
     parts.append(f'<div><a href="{escape(index_link)}" style="color:#1a73e8;">🏠 Back to Home</a></div>')
     parts.append('<ul style="list-style:none;padding:0;margin:6px 0 0 0;display:flex;flex-wrap:wrap;gap:4px;">')
     for doc in items:
@@ -124,8 +124,7 @@ def _build_doc_sitemap_html(all_docs_meta: list, current_title: str = "", index_
         style = 'font-weight:bold;color:#d32f2f;' if is_current else 'color:#1a73e8;text-decoration:none;'
         parts.append(f'<li><a href="{d_link}" style="{style}">📄 {d_title}</a></li>')
     if truncated:
-        remaining = total_count - max_items
-        parts.append(f'<li style="color:#999;font-size:0.9em;">… and {remaining} more</li>')
+        parts.append(f'<li style="color:#999;font-size:0.9em;">… and {total_count - max_items} more</li>')
     parts.append('</ul>')
     parts.append('</nav>')
     return "\n".join(parts)

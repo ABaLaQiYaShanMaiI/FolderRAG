@@ -388,21 +388,21 @@ function copyContent() {
 
 // HTML entity decoding helper: converts & -> &, < -> <, > -> >, etc.
 function htmlDecode(str) {
-  var txt = document.createElement('textarea');
+  const txt = document.createElement('textarea');
   txt.innerHTML = str;
   return txt.value;
 }
 
 // Inject anchor IDs into Markdown headings so TOC links can jump to them
 (function() {
-  var content = document.getElementById('doc-content');
+  const content = document.getElementById('doc-content');
   if (!content) return;
-  var html = content.innerHTML;
+  const html = content.innerHTML;
   // Match lines that start with # (Markdown headings) — handles both single and multi-#
-  var anchorHtml = html.replace(/^(#{1,4})\s+(.+)$/gm, function(match, hashes, titleText) {
+  const anchorHtml = html.replace(/^(#{1,4})\s+(.+)$/gm, function(match, hashes, titleText) {
     // Decode HTML entities (e.g. & -> &) first so anchorId matches Python-side _build_toc_html
-    var decoded = htmlDecode(titleText.trim().toLowerCase());
-    var anchorId = decoded
+    const decoded = htmlDecode(titleText.trim().toLowerCase());
+    const anchorId = decoded
       .replace(/[^\w\u4e00-\u9fff\- ]/g, '')
       .replace(/\s+/g, '-');
     return '<a id="' + anchorId + '"></a>' + match;
