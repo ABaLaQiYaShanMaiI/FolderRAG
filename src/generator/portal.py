@@ -313,7 +313,7 @@ _FILTER_DIRS = frozenset({
 })
 _FILTER_FILES = frozenset({
     '.gitignore', '.gitattributes', '.gitmodules',
-    '.gitkeep', '.gitlab-ci.yml', '.travis.yml', '.github',
+    '.gitkeep', '.gitlab-ci.yml', '.travis.yml',
     'LICENSE', 'COPYING', 'AUTHORS',
     # Thumbs
     'thumbs.db', 'desktop.ini',
@@ -478,11 +478,17 @@ def generate_portal(
 
     # Collect all files
     all_files = []
-    for dirpath, _, filenames in os.walk(folder_path):
+    for dirpath, dirnames, filenames in os.walk(folder_path):
+        # 原地过滤目录，阻止 os.walk 进入
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in _FILTER_DIRS and not d.startswith('.')
+        ]
         for fname in filenames:
-            if fname.startswith('.'):
-                continue
             full_path = os.path.join(dirpath, fname)
+            rel_path = os.path.relpath(full_path, folder_path)
+            if _should_filter_file(rel_path):
+                continue
             if os.path.isfile(full_path):
                 all_files.append(full_path)
 

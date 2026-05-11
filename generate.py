@@ -35,11 +35,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from src.parser.dispatcher import parse_file
 
-# Try to import portal generator
+# Try to import portal generator and shared filtering
 try:
-    from src.generator.portal import generate_portal
+    from src.generator.portal import generate_portal, _FILTER_DIRS, _should_filter_file
     HAS_PORTAL = True
 except ImportError:
+    _FILTER_DIRS = frozenset()
+    _should_filter_file = lambda rel_path: False
     HAS_PORTAL = False
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -48,13 +50,17 @@ logger = logging.getLogger(__name__)
 
 def collect_files(root_dir):
     """Walk through root_dir and yield all regular file paths (relative)."""
-    for dirpath, _, filenames in os.walk(root_dir):
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in _FILTER_DIRS and not d.startswith('.')
+        ]
         for fname in filenames:
-            if fname.startswith('.'):
-                continue
             full_path = os.path.join(dirpath, fname)
+            rel_path = os.path.relpath(full_path, root_dir)
+            if _should_filter_file(rel_path):
+                continue
             if os.path.isfile(full_path):
-                rel_path = os.path.relpath(full_path, root_dir)
                 yield full_path, rel_path
 
 
