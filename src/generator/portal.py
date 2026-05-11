@@ -21,9 +21,18 @@ from datetime import datetime
 from collections import Counter
 
 from src.parser.dispatcher import parse_file
-from src.generator.templates import wrap_index_html, build_file_content_blocks
+from src.generator.templates import (
+    wrap_index_html,
+    build_file_content_blocks,
+    _get_file_type,
+)
 
 logger = logging.getLogger(__name__)
+
+# Max characters per file before truncation.
+# Prevents a single huge file (e.g. 2MB SQL dump) from bloating the page and
+# exceeding AI context windows.
+MAX_CHARS_PER_FILE = 50_000
 
 
 # ============================================================
@@ -97,30 +106,6 @@ def extract_keywords(text: str, max_words: int = 8) -> list:
     return keywords
 
 
-def _get_file_type(filename: str) -> str:
-    """Determine file type from extension."""
-    ext = os.path.splitext(filename)[1].lower()
-    type_map = {
-        '.pdf': 'PDF', '.docx': 'DOCX', '.doc': 'DOC',
-        '.txt': 'TXT', '.md': 'Markdown',
-        '.py': 'Python', '.js': 'JavaScript', '.ts': 'TypeScript',
-        '.html': 'HTML', '.css': 'CSS', '.json': 'JSON',
-        '.xml': 'XML', '.yaml': 'YAML', '.yml': 'YAML',
-        '.csv': 'CSV', '.xlsx': 'Excel', '.xls': 'Excel',
-        '.pptx': 'PowerPoint', '.ppt': 'PowerPoint',
-        '.rtf': 'RTF', '.log': 'Log',
-        '.cfg': 'Config', '.ini': 'Config', '.conf': 'Config',
-        '.sh': 'Shell Script', '.bat': 'Batch', '.ps1': 'PowerShell',
-        '.sql': 'SQL', '.rb': 'Ruby', '.java': 'Java',
-        '.cpp': 'C++', '.c': 'C', '.h': 'C Header',
-        '.go': 'Go', '.rs': 'Rust', '.php': 'PHP',
-        '.swift': 'Swift', '.kt': 'Kotlin', '.scala': 'Scala',
-        '.r': 'R', '.lua': 'Lua',
-        '.toml': 'TOML', '.lock': 'Lock File',
-    }
-    return type_map.get(ext, ext.upper().lstrip('.').replace('.', '') if ext else 'Unknown')
-
-
 # ============================================================
 #  Filter rules: files to exclude from portal
 # ============================================================
@@ -178,7 +163,8 @@ def _is_readme_file(rel_path: str) -> bool:
 
 def escape_html(s: str) -> str:
     """Minimal HTML escape for safe attribute insertion."""
-    return s.replace('&', '&').replace('<', '<').replace('>', '>').replace('"', '"').replace("'", '&#x27;')
+    from html import escape as _he
+    return _he(s)
 
 
 # ============================================================
@@ -334,6 +320,14 @@ def generate_portal(
             continue
 
         char_count = len(text)
+        # Truncate extremely large files to prevent page bloat
+        if MAX_CHARS_PER_FILE and char_count > MAX_CHARS_PER_FILE:
+            text = text[:MAX_CHARS_PER_FILE] + (
+                f"\n\n... [截断：原文 {char_count:,} 字符，仅展示前 {MAX_CHARS_PER_FILE:,} 字符] ...\n"
+                f"... [Truncated: original {char_count:,} chars, showing first {MAX_CHARS_PER_FILE:,} chars] ..."
+            )
+            char_count = len(text)
+
         total_chars += char_count
 
         keywords = extract_keywords(text)

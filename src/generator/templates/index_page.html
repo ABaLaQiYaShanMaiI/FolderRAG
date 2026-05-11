@@ -442,15 +442,11 @@ function toggleFile(detailsEl, shouldOpen) {
 
 // ── Jump to file content from tree ──
 function jumpToFile(filename) {
-  // Try to find matching details element
-  const details = document.querySelectorAll('details.file-content');
-  for (const d of details) {
-    const summary = d.querySelector('summary');
-    if (summary && summary.textContent.includes(filename)) {
-      d.open = true;
-      d.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
+  const escaped = CSS.escape(filename);
+  const d = document.querySelector(`details.file-content[data-filename="${escaped}"]`);
+  if (d) {
+    d.open = true;
+    d.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
 
