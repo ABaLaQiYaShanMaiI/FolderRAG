@@ -1,1 +1,1 @@
-# DocPortal - 轻量离线文档门户：将文件夹转为浏览器 AI 可读的知识门户
+# FolderKnowledgeSiteGeneratorForAI - 轻量离线文档门户：将文件夹转为浏览器 AI 可读的知识门户

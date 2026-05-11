@@ -1,5 +1,5 @@
 """
-Shared pytest fixtures for DocPortal tests.
+Shared pytest fixtures for FolderKnowledgeSiteGeneratorForAI tests.
 """
 import os
 import tempfile

@@ -1,5 +1,5 @@
 """
-DocPortal Portal — Intelligent paginated knowledge portal generator
+FolderKnowledgeSiteGeneratorForAI Portal — Intelligent paginated knowledge portal generator
 
 Parses a folder into a searchable knowledge portal:
 - Each parsed document → independent HTML page (~8000 chars)

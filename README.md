@@ -7,13 +7,13 @@
 
 ---
 
-# DocPortal 📁 → 🌐
+# FolderKnowledgeSiteGeneratorForAI 📁 → 🌐
 
 > **Zero server · Zero API · Zero model — Turn folders into lightweight, offline knowledge portals for browser-based AI.**
 
-DocPortal 是一个极致轻量的本地知识库工具——不运行 AI 模型、不调用 API、不启动后台服务，只需一条命令即可将整个文件夹（PDF、Word、PPT、Excel、文本等）解析并打包成一个带搜索、关键词云、自动分页的静态知识网站，专供网页版 AI 直接读取。
+FolderKnowledgeSiteGeneratorForAI 是一个极致轻量的本地知识库工具——不运行 AI 模型、不调用 API、不启动后台服务，只需一条命令即可将整个文件夹（PDF、Word、PPT、Excel、文本等）解析并打包成一个带搜索、关键词云、自动分页的静态知识网站，专供网页版 AI 直接读取。
 
-DocPortal is an ultra-lightweight local knowledge base tool — it runs no AI models, calls no APIs, and starts no background servers. With a single command, it turns any folder into a static knowledge site with full-text search, keyword cloud, and automatic page splitting, designed specifically for browser-based AI to read natively.
+FolderKnowledgeSiteGeneratorForAI is an ultra-lightweight local knowledge base tool — it runs no AI models, calls no APIs, and starts no background servers. With a single command, it turns any folder into a static knowledge site with full-text search, keyword cloud, and automatic page splitting, designed specifically for browser-based AI to read natively.
 
 ---
 
@@ -219,7 +219,7 @@ output_dir/
 ## 📂 项目结构 / Project Structure
 
 ```
-DocPortal/
+FolderKnowledgeSiteGeneratorForAI/
 ├── generate.py              ← 📌 主入口 / Main entry point
 ├── gui.py                   ← 🖥️ 桌面 GUI（Tkinter）/ Desktop GUI
 ├── requirements.txt         ← 依赖清单 / Dependencies
@@ -294,11 +294,11 @@ pytest tests/ -v --tb=long              # 详细信息 / Detailed output
 ### v1.2.0 — 语言同步 & 文件夹结构树
 
 - **中英双语同步**：GUI 选择中文后，生成的门户页面默认显示中文，且可通过页面内的 EN/中文 按钮即时切换
-- **设置持久化**：语言偏好保存到 `~/.docportal_settings.json`，下次启动自动加载
+- **设置持久化**：语言偏好保存到 `~/.folderknowledge_settings.json`，下次启动自动加载
 - **文件夹结构树**：门户首页左侧新增完整文件夹树，点击文件名直接跳转
 - **跳过文件智能显示**：不支持的格式仅显示在文件树中（灰色标注），首页不生成卡片，保持界面整洁
 - **Clear 按钮**：GUI 新增 Clear 按钮，一键清空当前文件夹并重置所有状态
 - **按钮悬停效果修复**：所有操作按钮（浏览、粘贴、Clear）均添加了正确的 hover 颜色反馈
 - **拖拽兼容性修复**：确保 tkinterdnd2 正确注册 Drop 事件，文件夹可拖入 GUI
 
-> 想了解 DocPortal 与传统 RAG 方案的区别？请参阅上方的 [使用指南](#-使用指南--usage-guide)。
+> 想了解 FolderKnowledgeSiteGeneratorForAI 与传统 RAG 方案的区别？请参阅上方的 [使用指南](#-使用指南--usage-guide)。

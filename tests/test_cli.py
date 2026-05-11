@@ -24,7 +24,7 @@ def _create_sample_folder(tmpdir: str) -> str:
 
     # Text file
     with open(os.path.join(folder, "hello.txt"), "w", encoding="utf-8") as f:
-        f.write("Hello, this is a sample text file for DocPortal testing.\nIt has multiple lines.\n")
+        f.write("Hello, this is a sample text file for FolderKnowledgeSiteGeneratorForAI testing.\nIt has multiple lines.\n")
 
     # Markdown file
     with open(os.path.join(folder, "readme.md"), "w", encoding="utf-8") as f:
@@ -147,7 +147,7 @@ class TestPortalMode:
         index_path = os.path.join(output_dir, "index.html")
         with open(index_path, "r", encoding="utf-8") as f:
             content = f.read()
-        assert "DocPortal" in content or "doc-portal" in content
+        assert "FolderKnowledgeSiteGeneratorForAI" in content or "folder-knowledge" in content
         assert "sample_docs" in content
 
     def test_portal_page_creation(self, tmp_path):
@@ -213,7 +213,7 @@ class TestCLIArgs:
         """Verify --help prints usage information."""
         rc, stdout, stderr = _run_generate(["--help"])
         assert rc == 0
-        assert "DocPortal" in stdout or "docportal" in stdout.lower()
+        assert "FolderKnowledgeSiteGeneratorForAI" in stdout or "folderknowledge" in stdout.lower()
         assert "--portal" in stdout
 
     def test_version_or_name(self):

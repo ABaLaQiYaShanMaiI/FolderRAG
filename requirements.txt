@@ -1,5 +1,5 @@
 # ============================================================
-# DocPortal — Dependencies
+# FolderKnowledgeSiteGeneratorForAI — Dependencies
 # ============================================================
 # Document parsers
 pdfminer.six>=20221105

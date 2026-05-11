@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DocPortal Desktop — Knowledge Portal Generator
+FolderKnowledgeSiteGeneratorForAI Desktop — Knowledge Portal Generator
 """
 
 import os
@@ -25,9 +25,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-class DocPortalUI:
+class FolderKnowledgeSiteGeneratorForAIUI:
 
-    CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".docportal_settings.json")
+    CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".folderknowledge_settings.json")
 
     COLORS = {
         'bg': '#f0f2f5', 'card': '#ffffff', 'primary': '#1a73e8',
@@ -38,7 +38,7 @@ class DocPortalUI:
 
     L = {
         'en': {
-            'title': 'DocPortal',
+            'title': 'FolderKnowledgeSiteGeneratorForAI',
             'subtitle': 'Folder \u2192 Knowledge Portal',
             'drop': 'Click or drop a folder here',
             'hint': 'Ctrl+O Browse  |  Ctrl+G Generate',
@@ -75,7 +75,7 @@ class DocPortalUI:
             'open_folder': 'Open output folder?',
         },
         'zh': {
-            'title': 'DocPortal',
+            'title': 'FolderKnowledgeSiteGeneratorForAI',
             'subtitle': '文件夹 \u2192 知识门户',
             'drop': '点击选择或将文件夹拖入此处',
             'hint': 'Ctrl+O 浏览  |  Ctrl+G 生成',
@@ -124,7 +124,7 @@ class DocPortalUI:
 
         self._load_settings()
 
-        self.root.title("DocPortal")
+        self.root.title("FolderKnowledgeSiteGeneratorForAI")
         self.root.geometry("820x680")
         self.root.minsize(700, 600)
         self.setup_styles()
@@ -747,7 +747,7 @@ def main():
         root = TkinterDnD.Tk()
     except ImportError:
         root = tk.Tk()
-    app = DocPortalUI(root)
+    app = FolderKnowledgeSiteGeneratorForAIUI(root)
     if len(sys.argv) > 1:
         f = sys.argv[1]
         if os.path.isdir(f):

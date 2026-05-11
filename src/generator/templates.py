@@ -1,5 +1,5 @@
 """
-DocPortal — HTML Templates
+FolderKnowledgeSiteGeneratorForAI — HTML Templates
 Loads and renders HTML templates from the templates/ directory.
 English-only output for clean, compact HTML.
 """

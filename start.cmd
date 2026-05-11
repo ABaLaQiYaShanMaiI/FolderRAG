@@ -2,7 +2,7 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 echo =============================================
-echo  DocPortal - 文档知识门户生成器
+echo  FolderKnowledgeSiteGeneratorForAI - 文档知识门户生成器
 echo  Loading...
 echo =============================================
 echo.
