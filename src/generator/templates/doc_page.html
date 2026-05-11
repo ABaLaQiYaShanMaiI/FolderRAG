@@ -10,7 +10,6 @@
 <meta name="keywords" content="$meta_keywords">
 <meta name="robots" content="index,follow">
 <meta name="googlebot" content="index,follow">
-<meta name="revisit-after" content="7 days">
 <meta name="copilot-reading-context" content="full">
 <meta name="copilot-content-type" content="documentation">
 <meta name="document-source" content="$rel_path">
@@ -338,7 +337,6 @@ $toc_html
     <meta itemprop="dateModified" content="$mtime_iso">
     <meta itemprop="inLanguage" content="zh-CN">
     <meta itemprop="wordCount" content="$char_count_raw">
-    <meta itemprop="version" content="1.0">
     <div itemprop="articleBody" class="doc-content" id="doc-content">$escaped_text</div>
   </article>
 </main>
@@ -388,14 +386,23 @@ function copyContent() {
   });
 }
 
+// HTML entity decoding helper: converts & -> &, < -> <, > -> >, etc.
+function htmlDecode(str) {
+  var txt = document.createElement('textarea');
+  txt.innerHTML = str;
+  return txt.value;
+}
+
 // Inject anchor IDs into Markdown headings so TOC links can jump to them
 (function() {
-  const content = document.getElementById('doc-content');
+  var content = document.getElementById('doc-content');
   if (!content) return;
-  const html = content.innerHTML;
+  var html = content.innerHTML;
   // Match lines that start with # (Markdown headings) — handles both single and multi-#
-  const anchorHtml = html.replace(/^(#{1,4})\s+(.+)$/gm, function(match, hashes, titleText) {
-    const anchorId = titleText.trim().toLowerCase()
+  var anchorHtml = html.replace(/^(#{1,4})\s+(.+)$/gm, function(match, hashes, titleText) {
+    // Decode HTML entities (e.g. & -> &) first so anchorId matches Python-side _build_toc_html
+    var decoded = htmlDecode(titleText.trim().toLowerCase());
+    var anchorId = decoded
       .replace(/[^\w\u4e00-\u9fff\- ]/g, '')
       .replace(/\s+/g, '-');
     return '<a id="' + anchorId + '"></a>' + match;
