@@ -119,11 +119,9 @@ def split_large_text(text: str, max_chars: int = 12000) -> list:
         # Group headings into chunks
         chunks = []
         current_chunk_start = 0
-        current_heading_idx = 0
 
         for i, match in enumerate(heading_matches):
             heading_pos = match.start()
-            heading_level = len(match.group(1))
             heading_title = match.group(2).strip()
 
             # If this heading is far enough from the start of the current chunk,
@@ -134,7 +132,6 @@ def split_large_text(text: str, max_chars: int = 12000) -> list:
                 chunks.append((text[current_chunk_start:heading_pos].strip(),
                                heading_title))
                 current_chunk_start = heading_pos
-                current_heading_idx = i
 
         # Add remaining text as final chunk
         remaining = text[current_chunk_start:].strip()
@@ -283,7 +280,7 @@ def generate_portal(
     Args:
         folder_path: Path to the folder to scan
         output_dir: Output directory path
-        max_chars_per_page: Max characters per doc page (default 8000)
+        max_chars_per_page: Max characters per doc page (default 12000)
         include_skipped: Show unsupported files in the file tree
         show_progress: Show CLI progress output
 
@@ -318,6 +315,7 @@ def generate_portal(
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     docs_meta = []
+    page_entries = []
     total_chars = 0
     parsed_count = 0
     skipped_count = 0
@@ -381,6 +379,7 @@ def generate_portal(
             fname = safe_base if part_idx == 0 else "%s_part%d%s" % (base_name, part_idx + 1, base_ext)
             part_filenames.append(fname)
 
+        # First pass: collect all metadata (without related docs)
         for part_idx, (part_text, part_title) in enumerate(text_parts):
             char_count = len(part_text)
             total_chars += char_count
@@ -402,29 +401,6 @@ def generate_portal(
                     next_page = part_filenames[part_idx + 1]
 
             keywords = extract_keywords(part_text)
-            page_html = wrap_doc_html(
-                title=doc_title,
-                text=part_text,
-                folder_name=folder_name,
-                char_count=char_count,
-                file_size_hr=size_hr,
-                index_link="../index.html",
-                mtime=mtime_str,
-                ctime=ctime_str,
-                prev_page=prev_page,
-                next_page=next_page,
-                page_info=page_info,
-                keywords=keywords,
-                rel_path=rel_path,
-                total_parts=total_parts,
-                part_idx=part_idx,
-                all_docs_meta=docs_meta,
-            )
-
-            doc_path = os.path.join(docs_dir, part_filenames[part_idx])
-            with open(doc_path, 'w', encoding='utf-8') as f:
-                f.write(page_html)
-
             preview = part_text[:200].replace('\n', ' ').strip()
 
             if total_parts > 1 and part_idx == 0:
@@ -434,7 +410,7 @@ def generate_portal(
             else:
                 display_title = rel_path
 
-            docs_meta.append({
+            entry_meta = {
                 "title": display_title,
                 "file": "docs/%s" % part_filenames[part_idx],
                 "size": char_count,
@@ -444,6 +420,23 @@ def generate_portal(
                 "skipped": False,
                 "mtime": mtime_str,
                 "ctime": ctime_str,
+            }
+            docs_meta.append(entry_meta)
+            page_entries.append({
+                "part_idx": part_idx,
+                "part_fname": part_filenames[part_idx],
+                "doc_title": doc_title,
+                "part_text": part_text,
+                "prev_page": prev_page,
+                "next_page": next_page,
+                "page_info": page_info,
+                "keywords": keywords,
+                "total_parts": total_parts,
+                "char_count": char_count,
+                "rel_path": rel_path,
+                "size_hr": size_hr,
+                "mtime_str": mtime_str,
+                "ctime_str": ctime_str,
             })
             parsed_count += 1
 
@@ -454,6 +447,30 @@ def generate_portal(
         print()
 
     docs_meta.sort(key=lambda d: d.get("title", "").lower())
+
+    # Second pass: render HTML pages with complete docs_meta (for related docs)
+    for entry in page_entries:
+        page_html = wrap_doc_html(
+            title=entry["doc_title"],
+            text=entry["part_text"],
+            folder_name=folder_name,
+            char_count=entry["char_count"],
+            file_size_hr=entry["size_hr"],
+            index_link="../index.html",
+            mtime=entry["mtime_str"],
+            ctime=entry["ctime_str"],
+            prev_page=entry["prev_page"],
+            next_page=entry["next_page"],
+            page_info=entry["page_info"],
+            keywords=entry["keywords"],
+            rel_path=entry["rel_path"],
+            total_parts=entry["total_parts"],
+            part_idx=entry["part_idx"],
+            all_docs_meta=docs_meta,
+        )
+        doc_path = os.path.join(docs_dir, entry["part_fname"])
+        with open(doc_path, 'w', encoding='utf-8') as f:
+            f.write(page_html)
 
     # Build file tree (includes skipped files for display)
     file_tree_html = build_file_tree_html(folder_path, docs_dir) if include_skipped else ""

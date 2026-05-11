@@ -138,7 +138,9 @@ def _build_related_docs_html(current_title: str, current_keywords: list, all_doc
     parts.append('<ul class="related-list">')
     for score, doc in top:
         d_title = escape(doc.get("title", ""))
-        d_link = escape(doc.get("file", ""))
+        # Strip "docs/" prefix since doc pages are already inside docs/ directory
+        d_file = doc.get("file", "")
+        d_link = escape(d_file.replace("docs/", "", 1))
         score_pct = int(score * 100)
         parts.append(f'<li><a href="{d_link}">📄 {d_title}</a> <span class="rel-score">({score_pct}% match)</span></li>')
     parts.append('</ul>')
@@ -159,8 +161,25 @@ def wrap_doc_html(
     part_idx: int = 0,
     all_docs_meta: list = None,
 ) -> str:
+    # Inject anchor IDs into headings so TOC links work
+    def _inject_heading_anchors(t: str) -> str:
+        """Add <a id="..."> before each Markdown heading so TOC links can jump to them."""
+        lines = t.split('\n')
+        result_lines = []
+        for line in lines:
+            m = re.match(r'^(#{1,4})\s+(.+)$', line)
+            if m:
+                title_text = m.group(2).strip()
+                anchor_id = re.sub(r'[^\w\u4e00-\u9fff\- ]', '', title_text.lower())
+                anchor_id = re.sub(r'\s+', '-', anchor_id)
+                result_lines.append(f'<a id="{anchor_id}"></a>{line}')
+            else:
+                result_lines.append(line)
+        return '\n'.join(result_lines)
+
+    text_with_anchors = _inject_heading_anchors(text)
     escaped_title = escape(title)
-    escaped_text = escape(text)
+    escaped_text = escape(text_with_anchors)
     escaped_folder = escape(folder_name)
     title_parts = title.replace('\\', '/').split('/')
     breadcrumb_name = title_parts[-1] if title_parts else title
@@ -197,15 +216,12 @@ def wrap_doc_html(
     if next_page:
         prev_next_links += f'<link rel="next" href="{escape(next_page)}">\n'
 
-    # --- Canonical URL ---
-    canonical_url = escape(prev_page) if prev_page else ""
-    if not canonical_url:
-        # Use the current file name from title
-        safe_file = re.sub(r'[<>:"/\\|?*]', '_', title).replace(' ', '_')
-        canonical_url = escape(f"{safe_file}.html")
+    # --- Canonical URL: point to current page ---
+    safe_file = re.sub(r'[<>:"/\\|?*]', '_', title).replace(' ', '_')
+    canonical_url = escape(f"{safe_file}.html")
 
     # --- Base href ---
-    base_href = escape(index_link.rsplit('/', 1)[0] + '/' if '/' in index_link else './')
+    base_href = "./"
 
     # --- Mtime ISO format ---
     mtime_iso = mtime
@@ -254,13 +270,13 @@ def wrap_doc_html(
     og_meta_tags = ""
     og_meta_tags += f'<meta property="og:title" content="{escape(title)}">\n'
     og_meta_tags += f'<meta property="og:description" content="{escaped_meta_desc}">\n'
-    og_meta_tags += f'<meta property="og:type" content="article">\n'
+    og_meta_tags += '<meta property="og:type" content="article">\n'
     og_meta_tags += f'<meta property="og:url" content="{canonical_url}">\n'
     og_meta_tags += f'<meta property="og:site_name" content="{escape(folder_name)} Knowledge Portal">\n'
 
     # --- Twitter Card meta tags ---
     twitter_meta_tags = ""
-    twitter_meta_tags += f'<meta name="twitter:card" content="summary">\n'
+    twitter_meta_tags += '<meta name="twitter:card" content="summary">\n'
     twitter_meta_tags += f'<meta name="twitter:title" content="{escape(title)}">\n'
     twitter_meta_tags += f'<meta name="twitter:description" content="{escaped_meta_desc}">\n'
 
@@ -287,7 +303,7 @@ def wrap_doc_html(
     doc_summary_parts.append('</div>')
     doc_summary_html = "\n".join(doc_summary_parts)
 
-    # --- Table of Contents ---
+    # --- Table of Contents (anchors injected in text above) ---
     toc_html = _build_toc_html(text)
 
     # --- Related documents ---
@@ -512,6 +528,19 @@ def wrap_index_html(
         sitemap_lines.append('</nav>')
         sitemap_html = "\n".join(sitemap_lines)
 
+    # --- Build AI-friendly meta description for index page ---
+    index_meta_desc = f'Knowledge portal for folder "{folder_name}" with {doc_count} documents, {total_chars:,} total characters, generated at {generated_at}'
+    escaped_index_meta_desc = escape(index_meta_desc)
+    
+    # --- Build AI-friendly keywords for index page (top 20 from all docs) ---
+    all_index_keywords = set()
+    for doc in docs_meta:
+        for tag in doc.get("tags", []):
+            if tag and tag != "Skipped":
+                all_index_keywords.add(tag)
+    index_keywords_list = sorted(all_index_keywords)[:20]
+    escaped_index_keywords = escape(", ".join(index_keywords_list))
+
     template = _load_template("index_page.html")
     result = template.replace("$escaped_folder", escaped_folder)
     result = result.replace("$language", language)
@@ -527,6 +556,8 @@ def wrap_index_html(
     result = result.replace("$file_tree_html", file_tree_html)
     result = result.replace("$sitemap_html", sitemap_html)
     result = result.replace("$sitemap_xml_url", escape(sitemap_xml_url))
+    result = result.replace("$index_meta_description", escaped_index_meta_desc)
+    result = result.replace("$index_meta_keywords", escaped_index_keywords)
     return result
 
 
