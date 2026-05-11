@@ -6,13 +6,20 @@ Parses a folder into a searchable knowledge portal:
 - Large documents → multi-page with prev/next navigation
 - Unsupported files → shown only in the folder structure tree (no card)
 - index.html with search, tag cloud, document cards, and file tree
+
+Optimizations:
+  [A] Temp-file based text storage to eliminate memory pressure
+  [B] Pre-built shared sitemap + inverted-index related docs (O(N²)→O(N))
+  [C] Reduced sitemap entries (100→20) + external CSS
 """
 
 import os
 import re
+import io
 import logging
+import tempfile
 from datetime import datetime
-from collections import Counter
+from collections import Counter, defaultdict
 
 from src.parser.dispatcher import parse_file
 from src.generator.templates import wrap_doc_html, wrap_index_html, generate_sitemap_xml, generate_robots_txt
@@ -110,13 +117,9 @@ def split_large_text(text: str, max_chars: int = 12000) -> list:
         return [(text, None)]
 
     # First, try to split on Markdown headings (## or ###)
-    # We collect all heading positions and titles
     heading_matches = list(re.finditer(r'^(#{1,4})\s+(.+)$', text, re.MULTILINE))
 
-    # If we have enough headings to make meaningful splits, use them
     if heading_matches:
-        # Estimate: we want each chunk to be around max_chars
-        # Group headings into chunks
         chunks = []
         current_chunk_start = 0
 
@@ -124,35 +127,27 @@ def split_large_text(text: str, max_chars: int = 12000) -> list:
             heading_pos = match.start()
             heading_title = match.group(2).strip()
 
-            # If this heading is far enough from the start of the current chunk,
-            # and we're not at the first heading, create a split point
             if (heading_pos - current_chunk_start > max_chars * 0.8
                     and current_chunk_start > 0):
-                # End this chunk at the previous heading
                 chunks.append((text[current_chunk_start:heading_pos].strip(),
                                heading_title))
                 current_chunk_start = heading_pos
 
-        # Add remaining text as final chunk
         remaining = text[current_chunk_start:].strip()
         if remaining:
             last_title = heading_matches[-1].group(2).strip() if heading_matches else ""
             chunks.append((remaining, last_title))
 
-        # If we got 2+ chunks from heading-based splitting, use them
         if len(chunks) >= 2:
-            # Check if any chunk is still too large and needs further splitting
             final_chunks = []
             for chunk_text, chunk_title in chunks:
                 if len(chunk_text) > max_chars * 1.5:
-                    # Need to sub-split this chunk by paragraphs
                     sub_chunks = _split_by_paragraphs(chunk_text, max_chars, chunk_title)
                     final_chunks.extend(sub_chunks)
                 else:
                     final_chunks.append((chunk_text, chunk_title))
             return final_chunks
 
-    # Fall back to paragraph-based splitting
     return _split_by_paragraphs(text, max_chars)
 
 
@@ -164,7 +159,6 @@ def _split_by_paragraphs(text: str, max_chars: int, base_title: str = None) -> l
     current_len = 0
     part_num = 1
 
-    # Collect section titles for naming
     section_titles = []
     for line in text.split('\n'):
         m = re.match(r'^#{1,4}\s+(.+)$', line.strip())
@@ -200,6 +194,97 @@ def _split_by_paragraphs(text: str, max_chars: int, base_title: str = None) -> l
         parts.append((combined, part_title))
 
     return parts
+
+
+# ============================================================
+#  Temp-file helper (Optimization A)
+# ============================================================
+
+def _write_text_to_temp(text: str, prefix: str = "portal_") -> str:
+    """Write text to a temp file and return its path."""
+    fd, tmp_path = tempfile.mkstemp(suffix=".txt", prefix=prefix)
+    with io.open(fd, 'w', encoding='utf-8') as f:
+        f.write(text)
+    return tmp_path
+
+
+def _read_text_from_temp(tmp_path: str) -> str:
+    """Read text from a temp file."""
+    with open(tmp_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def _cleanup_temp(tmp_path: str):
+    """Delete a temp file if it exists."""
+    try:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+    except Exception:
+        pass
+
+
+# ============================================================
+#  Inverted-index builder (Optimization B)
+# ============================================================
+
+def _build_keyword_inverted_index(docs_meta: list) -> dict:
+    """Build inverted index: keyword → list of doc meta dicts."""
+    kw_index = defaultdict(list)
+    for doc in docs_meta:
+        if doc.get("skipped") or not doc.get("file"):
+            continue
+        for tag in doc.get("tags", []):
+            tag_lower = tag.lower()
+            kw_index[tag_lower].append(doc)
+    return dict(kw_index)
+
+
+def _find_related_docs_via_index(
+    current_title: str,
+    current_keywords: list,
+    kw_index: dict,
+    max_items: int = 5,
+) -> list:
+    """
+    Find related documents using inverted index.
+    Instead of O(N) scan of all docs, only examine candidates from keyword index.
+    """
+    if not current_keywords or not kw_index:
+        return []
+
+    current_kw_set = set(k.lower() for k in current_keywords)
+    if not current_kw_set:
+        return []
+
+    # Collect candidate docs from matching keywords
+    candidates = {}
+    for kw in current_kw_set:
+        for doc in kw_index.get(kw, []):
+            doc_title = doc.get("title", "")
+            if doc_title == current_title:
+                continue
+            if doc_title not in candidates:
+                candidates[doc_title] = {"doc": doc, "kw_set": set()}
+            candidates[doc_title]["kw_set"].add(kw)
+
+    if not candidates:
+        return []
+
+    # Score by Jaccard similarity
+    scored = []
+    for title, info in candidates.items():
+        doc_tags = [t.lower() for t in info["doc"].get("tags", [])]
+        doc_kw_set = set(doc_tags)
+        intersection = len(current_kw_set & doc_kw_set)
+        union = len(current_kw_set | doc_kw_set)
+        if union == 0:
+            continue
+        score = intersection / union
+        if score > 0:
+            scored.append((score, info["doc"]))
+
+    scored.sort(key=lambda x: -x[0])
+    return scored[:max_items]
 
 
 # ============================================================
@@ -298,7 +383,12 @@ def generate_portal(
             print("       Content: %d items (overwriting matching files)" % len(existing))
 
     docs_dir = os.path.join(output_dir, "docs")
+    assets_dir = os.path.join(output_dir, "assets")
     os.makedirs(docs_dir, exist_ok=True)
+    os.makedirs(assets_dir, exist_ok=True)
+
+    # Write shared CSS files (Optimization C: external CSS)
+    _write_shared_css(assets_dir)
 
     # Collect all files
     all_files = []
@@ -316,6 +406,7 @@ def generate_portal(
 
     docs_meta = []
     page_entries = []
+    temp_paths = []           # Track temp files for cleanup (Optimization A)
     total_chars = 0
     parsed_count = 0
     skipped_count = 0
@@ -379,7 +470,7 @@ def generate_portal(
             fname = safe_base if part_idx == 0 else "%s_part%d%s" % (base_name, part_idx + 1, base_ext)
             part_filenames.append(fname)
 
-        # First pass: collect all metadata (without related docs)
+        # First pass: collect metadata; write part_text to temp files (Optimization A)
         for part_idx, (part_text, part_title) in enumerate(text_parts):
             char_count = len(part_text)
             total_chars += char_count
@@ -422,11 +513,16 @@ def generate_portal(
                 "ctime": ctime_str,
             }
             docs_meta.append(entry_meta)
+
+            # Optimization A: Write part_text to temp file instead of keeping in memory
+            tmp_path = _write_text_to_temp(part_text, prefix="portal_")
+            temp_paths.append(tmp_path)
+
             page_entries.append({
                 "part_idx": part_idx,
                 "part_fname": part_filenames[part_idx],
                 "doc_title": doc_title,
-                "part_text": part_text,
+                "tmp_path": tmp_path,            # ← temp file path instead of text
                 "prev_page": prev_page,
                 "next_page": next_page,
                 "page_info": page_info,
@@ -448,11 +544,43 @@ def generate_portal(
 
     docs_meta.sort(key=lambda d: d.get("title", "").lower())
 
-    # Second pass: render HTML pages with complete docs_meta (for related docs)
-    for entry in page_entries:
+    # Optimization B: Pre-build shared sitemap HTML (single call, not per-page)
+    # Use max_items=20 for smaller pages (Optimization C)
+    from src.generator.templates import _build_doc_sitemap_html as _build_sitemap
+    shared_sitemap_html = _build_sitemap(docs_meta, current_title="", index_link="../index.html", max_items=20) if docs_meta else ""
+
+    # Optimization B: Build inverted index for related docs
+    kw_index = _build_keyword_inverted_index(docs_meta)
+
+    total_pages = len(page_entries)
+    if show_progress and total_pages > 0:
+        print("  [Generate] Generating %d HTML pages..." % total_pages)
+
+    # Second pass: render HTML pages (Optimization A: read from temp files)
+    for pg_idx, entry in enumerate(page_entries):
+        if show_progress and total_pages > 0:
+            pct = (pg_idx + 1) / total_pages * 100
+            bar_len = 30
+            filled = int(bar_len * (pg_idx + 1) / total_pages)
+            bar = '#' * filled + '.' * (bar_len - filled)
+            print("\r  [%s] %d/%d (%.0f%%) - writing %s" % (
+                bar, pg_idx + 1, total_pages, pct, entry["part_fname"][:40]),
+                end='', flush=True)
+
+        # Read text from temp file (Optimization A)
+        part_text = _read_text_from_temp(entry["tmp_path"])
+
+        # Optimization B: Use inverted-index for related docs
+        related_docs = _find_related_docs_via_index(
+            entry["doc_title"], entry["keywords"], kw_index, max_items=5
+        )
+
+        # Determine CSS link path: from docs/ subdirectory → ../assets/doc.css
+        css_path = "../assets/doc.css"
+
         page_html = wrap_doc_html(
             title=entry["doc_title"],
-            text=entry["part_text"],
+            text=part_text,
             folder_name=folder_name,
             char_count=entry["char_count"],
             file_size_hr=entry["size_hr"],
@@ -467,10 +595,22 @@ def generate_portal(
             total_parts=entry["total_parts"],
             part_idx=entry["part_idx"],
             all_docs_meta=docs_meta,
+            # Optimization B: pass pre-built sitemap
+            prebuilt_sitemap=shared_sitemap_html,
+            # Optimization B: pass pre-computed related docs
+            prebuilt_related_docs=related_docs,
+            # Optimization C: external CSS path
+            css_path=css_path,
         )
         doc_path = os.path.join(docs_dir, entry["part_fname"])
         with open(doc_path, 'w', encoding='utf-8') as f:
             f.write(page_html)
+
+        # Clean up temp file immediately after use (Optimization A)
+        _cleanup_temp(entry["tmp_path"])
+
+    if show_progress and total_pages > 0:
+        print()
 
     # Build file tree (includes skipped files for display)
     file_tree_html = build_file_tree_html(folder_path, docs_dir) if include_skipped else ""
@@ -485,6 +625,7 @@ def generate_portal(
             generated_at=now,
             file_tree_html=file_tree_html,
             language=language,
+            css_path="assets/index.css",  # Optimization C: external CSS
         )
         index_path = os.path.join(output_dir, "index.html")
         with open(index_path, 'w', encoding='utf-8') as f:
@@ -509,6 +650,10 @@ def generate_portal(
             f.write(robots_txt)
         logger.info("Robots.txt: %s", robots_path)
 
+    # Clean up any remaining temp files (safety net)
+    for tmp_path in temp_paths:
+        _cleanup_temp(tmp_path)
+
     return {
         "doc_count": parsed_count,
         "total_chars": total_chars,
@@ -520,3 +665,182 @@ def generate_portal(
         "sitemap_file": os.path.join(output_dir, "sitemap.xml") if docs_meta else None,
         "robots_file": os.path.join(output_dir, "robots.txt") if docs_meta else None,
     }
+
+
+# ============================================================
+#  Shared CSS writer (Optimization C)
+# ============================================================
+
+def _write_shared_css(assets_dir: str):
+    """Write external CSS files shared by all pages."""
+    # doc.css — styles for doc_page.html (extracted from template)
+    doc_css = """/* FolderKnowledgeSiteGeneratorForAI — Doc Page Styles */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  max-width: 900px; margin: 0 auto; padding: 24px 20px;
+  background: #f8f9fa; color: #333; line-height: 1.7;
+}
+.lang-en { color: #888; font-size: 0.92em; }
+.lang-zh + .lang-en::before { content: ""; }
+nav[aria-label="Breadcrumb"] {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.85em; color: #888; margin-bottom: 8px; flex-wrap: wrap;
+}
+nav[aria-label="Breadcrumb"] a { color: #1a73e8; text-decoration: none; }
+nav[aria-label="Breadcrumb"] a:hover { text-decoration: underline; }
+nav[aria-label="Breadcrumb"] .sep { color: #ccc; user-select: none; }
+.nav-bar {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 20px; padding-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0; flex-wrap: wrap;
+}
+.nav-bar .title {
+  font-size: 1.1em; font-weight: 600; color: #1a73e8;
+  flex: 1; word-break: break-all;
+}
+.nav-bar a {
+  color: #1a73e8; text-decoration: none; font-size: 0.9em;
+  padding: 5px 14px; border-radius: 6px; transition: background 0.2s;
+  white-space: nowrap;
+}
+.nav-bar a:hover { background: #e8f0fe; }
+.doc-meta {
+  background: #e8f0fe; border-radius: 8px; padding: 10px 14px;
+  margin-bottom: 20px; font-size: 0.85em; color: #444;
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+}
+.doc-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.doc-meta .copy-btn {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px; background: #1a73e8; color: white;
+  border: none; border-radius: 6px; cursor: pointer;
+  font-size: 0.85em; transition: background 0.2s;
+}
+.doc-meta .copy-btn:hover { background: #1557b0; }
+.progress-bar-container {
+  width: 100%; height: 4px;
+  background: #e0e0e0; border-radius: 2px;
+  margin-bottom: 12px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; background: #1a73e8;
+  border-radius: 2px; transition: width 0.3s ease;
+}
+.doc-summary {
+  background: #f0f4ff; border: 1px solid #d0d8f0;
+  border-radius: 8px; padding: 12px 16px;
+  margin-bottom: 20px; font-size: 0.85em; color: #444; line-height: 1.6;
+}
+.doc-summary .sum-title { font-weight: 600; color: #1a73e8; margin-bottom: 6px; }
+.doc-summary .sum-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 4px; }
+.doc-summary .sum-label { color: #888; font-weight: 500; min-width: 60px; }
+.doc-summary .sum-keywords { display: flex; gap: 4px; flex-wrap: wrap; }
+.doc-summary .sum-tag {
+  display: inline-block; padding: 1px 8px;
+  background: #e0e8ff; color: #1a73e8; border-radius: 10px; font-size: 0.9em;
+}
+.doc-summary .sum-text { margin-top: 6px; padding-top: 6px; border-top: 1px solid #d0d8f0; color: #555; line-height: 1.5; }
+.toc-container {
+  background: #f8f9fa; border: 1px solid #e0e0e0;
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 20px;
+}
+.toc-title { font-weight: 600; color: #1a73e8; font-size: 0.9em; margin-bottom: 8px; }
+.toc-list { list-style: none; padding: 0; margin: 0; }
+.toc-list li { padding: 2px 0; font-size: 0.85em; }
+.toc-list a { color: #1a73e8; text-decoration: none; }
+.toc-list a:hover { text-decoration: underline; }
+.toc-h2 { padding-left: 0; }
+.toc-h3 { padding-left: 16px; }
+.toc-h4 { padding-left: 32px; }
+.doc-content {
+  background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+  padding: 24px; white-space: pre-wrap; word-break: break-word;
+  font-size: 0.95em; line-height: 1.7;
+}
+.related-docs {
+  background: #f8f9fa; border: 1px solid #e0e0e0;
+  border-radius: 8px; padding: 12px 16px;
+  margin-top: 20px; margin-bottom: 20px;
+}
+.related-title { font-weight: 600; color: #1a73e8; font-size: 0.9em; margin-bottom: 8px; }
+.related-list { list-style: none; padding: 0; margin: 0; }
+.related-list li { padding: 3px 0; font-size: 0.85em; }
+.related-list a { color: #1a73e8; text-decoration: none; }
+.related-list a:hover { text-decoration: underline; }
+.related-list .rel-score { color: #999; font-size: 0.85em; }
+nav[aria-label="Pagination"] {
+  display: flex; justify-content: center; align-items: center;
+  gap: 16px; margin-bottom: 20px; padding: 10px 0; flex-wrap: wrap;
+}
+.page-nav {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 16px; background: #1a73e8; color: white;
+  text-decoration: none; border-radius: 6px;
+  font-size: 0.9em; transition: background 0.2s;
+}
+.page-nav:hover { background: #1557b0; }
+.page-info { font-size: 0.85em; color: #888; }
+.footer {
+  text-align: center; color: #999; font-size: 0.82em;
+  margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0;
+}
+.copilot-hint { display: none; }
+@media (prefers-color-scheme: dark) {
+  body { background: #1a1a2e; color: #e0e0e0; }
+  .lang-en { color: #999; }
+  nav[aria-label="Breadcrumb"] { color: #888; }
+  nav[aria-label="Breadcrumb"] a { color: #64b5f6; }
+  nav[aria-label="Breadcrumb"] .sep { color: #555; }
+  .nav-bar { border-bottom-color: #333; }
+  .nav-bar .title { color: #64b5f6; }
+  .nav-bar a { color: #64b5f6; }
+  .nav-bar a:hover { background: #2a2a4e; }
+  .doc-meta { background: #2a2a4e; color: #ccc; }
+  .doc-meta .copy-btn { background: #1565c0; }
+  .doc-meta .copy-btn:hover { background: #1976d2; }
+  .progress-bar-container { background: #333; }
+  .progress-bar-fill { background: #64b5f6; }
+  .doc-summary { background: #1a2640; border-color: #2a3a5a; color: #ccc; }
+  .doc-summary .sum-title { color: #64b5f6; }
+  .doc-summary .sum-tag { background: #2a3a5a; color: #64b5f6; }
+  .doc-summary .sum-text { border-top-color: #2a3a5a; color: #aaa; }
+  .toc-container { background: #1a1a2e; border-color: #333; }
+  .toc-title { color: #64b5f6; }
+  .toc-list a { color: #64b5f6; }
+  .doc-content { background: #16213e; border-color: #333; color: #e0e0e0; }
+  .related-docs { background: #1a1a2e; border-color: #333; }
+  .related-title { color: #64b5f6; }
+  .related-list a { color: #64b5f6; }
+  .related-list .rel-score { color: #666; }
+  .page-nav { background: #1565c0; }
+  .page-nav:hover { background: #1976d2; }
+  .page-info { color: #888; }
+  .footer { border-top-color: #333; color: #666; }
+}
+@media print {
+  body { background: white; color: black; padding: 0.5in; }
+  .nav-bar { border-bottom: 1px solid #ccc; }
+  .doc-meta { background: #f5f5f5; border: 1px solid #ddd; }
+  .doc-summary { background: #f5f5f5; border: 1px solid #ddd; }
+  .toc-container { display: none; }
+  .doc-content { background: white; border: 1px solid #ddd; }
+  .related-docs { display: none; }
+  .doc-meta .copy-btn, nav[aria-label="Pagination"], .doc-summary { display: none; }
+  .footer { border-top: 1px solid #ccc; }
+}
+"""
+    with open(os.path.join(assets_dir, "doc.css"), 'w', encoding='utf-8') as f:
+        f.write(doc_css)
+
+    # index.css — minimal shared styles for index_page.html
+    index_css = """/* FolderKnowledgeSiteGeneratorForAI — Index Page Styles */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: #f8f9fa; color: #333; line-height: 1.6;
+}
+/* Minimal styles; most styling is inline in index_page.html template */
+"""
+    with open(os.path.join(assets_dir, "index.css"), 'w', encoding='utf-8') as f:
+        f.write(index_css)

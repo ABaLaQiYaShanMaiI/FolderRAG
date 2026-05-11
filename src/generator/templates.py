@@ -194,6 +194,9 @@ def wrap_doc_html(
     total_parts: int = 1,
     part_idx: int = 0,
     all_docs_meta: list = None,
+    prebuilt_sitemap: str = None,
+    prebuilt_related_docs: list = None,
+    css_path: str = None,
 ) -> str:
     escaped_title = escape(title)
     escaped_text = escape(text)
@@ -324,7 +327,11 @@ def wrap_doc_html(
     toc_html = _build_toc_html(text)
 
     # --- Related documents ---
-    related_docs_html = _build_related_docs_html(title, kw_list, all_docs_meta or [])
+    if prebuilt_related_docs is not None:
+        # prebuilt_related_docs is a list of (score, doc_meta) tuples
+        related_docs_html = _render_prebuilt_related_docs_html(prebuilt_related_docs)
+    else:
+        related_docs_html = _build_related_docs_html(title, kw_list, all_docs_meta or [])
 
     # --- Reading progress bar ---
     progress_bar_html = ""
@@ -404,9 +411,24 @@ def wrap_doc_html(
     result = result.replace("$progress_bar_html", progress_bar_html)
     result = result.replace("$toc_html", toc_html)
     result = result.replace("$related_docs_html", related_docs_html)
-    # AI sitemap: a compact list of all docs for AI crawler navigation (max 100 items to avoid file bloat)
-    sitemap_html = _build_doc_sitemap_html(all_docs_meta or [], current_title=title, index_link=index_link, max_items=100)
+    # AI sitemap: use pre-built if provided, otherwise build fresh (Optimization B)
+    if prebuilt_sitemap is not None:
+        sitemap_html = prebuilt_sitemap
+    else:
+        sitemap_html = _build_doc_sitemap_html(all_docs_meta or [], current_title=title, index_link=index_link, max_items=100)
     result = result.replace("$sitemap_html", sitemap_html)
+
+    # External CSS: replace inline <style> with <link> if css_path is provided (Optimization C)
+    if css_path:
+        css_link = f'<link rel="stylesheet" href="{escape(css_path)}">\n'
+        # Replace the opening <style> tag and everything up to </style> with the link
+        result = result.replace('<style>', css_link, 1)
+        # Find and remove the closing </style> and everything between
+        style_end = result.find('</style>')
+        if style_end != -1:
+            # Find the start of the style block content after our new link
+            link_end = result.find(css_link) + len(css_link)
+            result = result[:link_end] + result[style_end + len('</style>'):]
     return result
 
 
@@ -450,6 +472,7 @@ def wrap_index_html(
     total_chars: int, generated_at: str, file_tree_html: str = "",
     language: str = "en",
     sitemap_xml_url: str = "",
+    css_path: str = None,
 ) -> str:
     escaped_folder = escape(folder_name)
     escaped_path = escape(folder_path)
@@ -578,6 +601,16 @@ def wrap_index_html(
     result = result.replace("$sitemap_xml_url", escape(sitemap_xml_url))
     result = result.replace("$index_meta_description", escaped_index_meta_desc)
     result = result.replace("$index_meta_keywords", escaped_index_keywords)
+
+    # External CSS: replace inline <style> with <link> if css_path is provided (Optimization C)
+    if css_path:
+        css_link = f'<link rel="stylesheet" href="{escape(css_path)}">\n'
+        result = result.replace('<style>', css_link, 1)
+        style_end = result.find('</style>')
+        if style_end != -1:
+            link_end = result.find(css_link) + len(css_link)
+            result = result[:link_end] + result[style_end + len('</style>'):]
+
     return result
 
 
@@ -622,6 +655,26 @@ Allow: /
 # Sitemap
 Sitemap: {sitemap_filename}
 """
+
+
+
+def _render_prebuilt_related_docs_html(related_docs: list) -> str:
+    """Render pre-computed related documents HTML from (score, doc_meta) tuples."""
+    if not related_docs:
+        return ""
+    parts = []
+    parts.append('<div class="related-docs">')
+    parts.append('<div class="related-title">🔗 Related Documents</div>')
+    parts.append('<ul class="related-list">')
+    for score, doc in related_docs:
+        d_title = escape(doc.get("title", ""))
+        d_file = doc.get("file", "")
+        d_link = escape(d_file.replace("docs/", "", 1))
+        score_pct = int(score * 100)
+        parts.append(f'<li><a href="{d_link}">📄 {d_title}</a> <span class="rel-score">({score_pct}% match)</span></li>')
+    parts.append('</ul>')
+    parts.append('</div>')
+    return "\n".join(parts)
 
 
 def _format_total_size(docs_meta: list) -> str:

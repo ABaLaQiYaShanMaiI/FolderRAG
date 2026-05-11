@@ -39,7 +39,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
     L = {
         'en': {
             'title': 'FolderKnowledgeSiteGeneratorForAI',
-            'subtitle': 'Folder \u2192 Knowledge Portal',
+            'subtitle': 'Folder → Knowledge Portal',
             'drop': 'Click or drop a folder here',
             'hint': 'Ctrl+O Browse  |  Ctrl+G Generate',
             'browse': 'Browse',
@@ -73,10 +73,17 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'gen_done': 'Generated!',
             'portal_done': 'Portal generated!',
             'open_folder': 'Open output folder?',
+            'server_start': 'Start Server',
+            'server_stop': 'Stop Server',
+            'server_running': 'Server running at',
+            'server_ask': 'Start local server for AI/Copilot reading?',
+            'copy_url': 'Copy URL',
+            'port_label': 'Port:',
+            'total': 'Total',
         },
         'zh': {
             'title': 'FolderKnowledgeSiteGeneratorForAI',
-            'subtitle': '文件夹 \u2192 知识门户',
+            'subtitle': '文件夹 → 知识门户',
             'drop': '点击选择或将文件夹拖入此处',
             'hint': 'Ctrl+O 浏览  |  Ctrl+G 生成',
             'browse': '浏览',
@@ -110,6 +117,13 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'gen_done': '生成成功！',
             'portal_done': '门户生成成功！',
             'open_folder': '打开输出文件夹？',
+            'server_start': '启动服务器',
+            'server_stop': '停止服务器',
+            'server_running': '服务器运行中：',
+            'server_ask': '是否启动本地服务器供 AI 读取？',
+            'copy_url': '复制地址',
+            'port_label': '端口：',
+            'total': '总计',
         }
     }
 
@@ -122,22 +136,30 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.generating = False
         self.output_path = os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_export.html")
 
+        # --- HTTP server state ---
+        self._server_thread = None
+        self._httpd = None
+        self._server_port = 8080
+        self._server_root = None
+
         self._load_settings()
 
         self.root.title("FolderKnowledgeSiteGeneratorForAI")
-        self.root.geometry("820x680")
+        self.root.geometry("820x720")
         self.root.minsize(700, 600)
         self.setup_styles()
         self.build_all()
         self.center_window()
         self.bind_shortcuts()
 
+        # Bind window close to auto-stop server
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
     def tr(self, key):
         return self.L[self._lang][key]
 
     def set_lang(self, lang):
         if lang != self._lang:
-            # Save user settings before rebuild
             saved_mode = self.mode_var.get() if hasattr(self, 'mode_var') else 'single'
             saved_skip = self.skip_var.get() if hasattr(self, 'skip_var') else True
             saved_max_chars = self.max_ch_var.get() if hasattr(self, 'max_ch_var') else '50000'
@@ -150,7 +172,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self._save_settings()
             self.build_all()
 
-            # Restore user settings after rebuild
             self.mode_var.set(saved_mode)
             self.skip_var.set(saved_skip)
             self.max_ch_var.set(saved_max_chars)
@@ -163,7 +184,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
     def _save_settings(self):
         import json
         try:
-            data = {"language": self._lang}
+            data = {"language": self._lang, "server_port": self._server_port}
             with open(self.CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
@@ -178,8 +199,105 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                 lang = data.get("language", "en")
                 if lang in self.L:
                     self._lang = lang
+                self._server_port = data.get("server_port", 8080)
         except Exception as e:
             logger.warning("Failed to load settings: %s", e)
+
+    def _on_close(self):
+        """Cleanup on window close: stop HTTP server."""
+        self._stop_server()
+        self.root.destroy()
+
+    def _start_server(self, directory, port=8080, max_attempts=10):
+        """Start HTTP server in a daemon thread."""
+        import http.server
+        import socketserver
+        import webbrowser
+
+        if self._httpd is not None:
+            return True
+
+        actual_port = port
+        for attempt in range(max_attempts):
+            try:
+                os.chdir(directory)
+                handler = http.server.SimpleHTTPRequestHandler
+                self._httpd = socketserver.TCPServer(("", actual_port), handler)
+                break
+            except OSError as e:
+                if "Address already in use" in str(e) or "10048" in str(e) or "only one usage" in str(e).lower():
+                    actual_port += 1
+                    continue
+                else:
+                    logger.error("Failed to start server: %s", e)
+                    return False
+            except Exception as e:
+                logger.error("Failed to start server: %s", e)
+                return False
+        else:
+            logger.error("Could not find free port after %d attempts", max_attempts)
+            return False
+
+        self._server_port = actual_port
+        self._server_root = directory
+        self._server_thread = threading.Thread(
+            target=self._httpd.serve_forever,
+            daemon=True,
+            name="HTTPServer"
+        )
+        self._server_thread.start()
+        self._save_settings()
+
+        # Update status bar
+        self._update_server_ui()
+
+        # Open browser
+        webbrowser.open(f"http://localhost:{actual_port}/index.html")
+        return True
+
+    def _stop_server(self):
+        """Stop the HTTP server."""
+        if self._httpd:
+            try:
+                self._httpd.shutdown()
+                self._httpd.server_close()
+            except Exception:
+                pass
+            self._httpd = None
+            self._server_thread = None
+            self._server_root = None
+        self._update_server_ui()
+
+    def _update_server_ui(self):
+        """Update server status display in UI."""
+        is_running = self._httpd is not None
+
+        if hasattr(self, 'server_status_lbl'):
+            if is_running:
+                url = f"http://localhost:{self._server_port}"
+                self.server_status_lbl.config(
+                    text=f"🟢 {self.tr('server_running')} {url}",
+                    fg=self.COLORS['success']
+                )
+                self.server_start_btn.pack_forget()
+                self.server_stop_btn.pack(side=tk.LEFT, padx=2)
+                self.server_copy_btn.pack(side=tk.LEFT, padx=2)
+            else:
+                self.server_status_lbl.config(
+                    text=self.tr('status_ready'),
+                    fg=self.COLORS['text_secondary']
+                )
+                self.server_stop_btn.pack_forget()
+                self.server_copy_btn.pack_forget()
+                self.server_start_btn.pack(side=tk.LEFT, padx=2)
+
+    def _copy_server_url(self):
+        """Copy server URL to clipboard."""
+        if self._httpd:
+            url = f"http://localhost:{self._server_port}"
+            self.root.clipboard_clear()
+            self.root.clipboard_append(url)
+            self.status_var.set(f"URL copied: {url}")
 
     def setup_styles(self):
         style = ttk.Style(); style.theme_use('clam')
@@ -228,6 +346,9 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         # ── Settings panel ──
         self.build_settings()
 
+        # ── Server control bar ──
+        self.build_server_controls()
+
         # ── Generate button + status ──
         self.build_gen_section()
 
@@ -246,10 +367,8 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         except Exception as e:
             print("TkinterDnD not available:", e)
 
-        # Visual feedback on hover
         folder_f.bind('<Enter>', lambda e: folder_f.configure(bg=self.COLORS['drop_bg_hover']))
         folder_f.bind('<Leave>', lambda e: folder_f.configure(bg=self.COLORS['card']))
-        # Click to browse
         folder_f.bind('<Button-1>', lambda e: self.browse_folder())
 
         tk.Label(folder_f, text=self.tr('drop'), font=('Segoe UI', 11, 'bold'),
@@ -420,6 +539,15 @@ class FolderKnowledgeSiteGeneratorForAIUI:
 
         pr2 = tk.Frame(self.portal_f, bg=self.COLORS['card'])
         pr2.pack(fill=tk.X, pady=1)
+
+        # Port input
+        tk.Label(pr2, text=self.tr('port_label'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
+        self.port_var = tk.StringVar(value=str(self._server_port))
+        port_entry = ttk.Entry(pr2, textvariable=self.port_var, width=8)
+        port_entry.pack(side=tk.LEFT, padx=(4, 8))
+        port_entry.bind('<FocusOut>', lambda e: self._save_port())
+
         tk.Label(pr2, text=self.tr('chars_page'), font=('Segoe UI', 10),
                  bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
         self.perpage_var = tk.StringVar(value='8000')
@@ -430,6 +558,89 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         tk.Checkbutton(self.portal_f, text=self.tr('show_skip'),
                        variable=self.skip_var, font=('Segoe UI', 10),
                        bg=self.COLORS['card'], selectcolor=self.COLORS['card']).pack(anchor=tk.W, pady=(2, 0))
+
+    def _save_port(self):
+        """Save port from entry widget."""
+        try:
+            self._server_port = int(self.port_var.get().strip())
+        except (ValueError, AttributeError):
+            pass
+
+    def build_server_controls(self):
+        """Build HTTP server control bar (hidden until portal generated)."""
+        self.server_f = tk.Frame(self.main, bg=self.COLORS['card'],
+                                 highlightbackground=self.COLORS['border'],
+                                 highlightthickness=1, padx=10, pady=6)
+        self.server_f.pack(fill=tk.X, pady=(0, 6))
+
+        self.server_status_lbl = tk.Label(
+            self.server_f,
+            text=self.tr('status_ready'),
+            font=('Segoe UI', 10),
+            bg=self.COLORS['card'],
+            fg=self.COLORS['text_secondary']
+        )
+        self.server_status_lbl.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.server_start_btn = tk.Button(
+            self.server_f,
+            text=f"▶ {self.tr('server_start')}",
+            font=('Segoe UI', 9),
+            bg=self.COLORS['primary'],
+            fg='white',
+            relief='flat',
+            cursor='hand2',
+            command=self._on_server_start,
+            padx=10, pady=2
+        )
+        self.server_start_btn.pack(side=tk.LEFT, padx=2)
+        self.server_start_btn.bind('<Enter>', lambda e: self.server_start_btn.configure(bg=self.COLORS['primary_hover']))
+        self.server_start_btn.bind('<Leave>', lambda e: self.server_start_btn.configure(bg=self.COLORS['primary']))
+
+        self.server_stop_btn = tk.Button(
+            self.server_f,
+            text=f"⏹ {self.tr('server_stop')}",
+            font=('Segoe UI', 9),
+            bg=self.COLORS['error'],
+            fg='white',
+            relief='flat',
+            cursor='hand2',
+            command=self._stop_server,
+            padx=10, pady=2
+        )
+        # Initially hidden
+        self.server_stop_btn.pack_forget()
+        self.server_stop_btn.bind('<Enter>', lambda e: self.server_stop_btn.configure(bg='#d32f2f'))
+        self.server_stop_btn.bind('<Leave>', lambda e: self.server_stop_btn.configure(bg=self.COLORS['error']))
+
+        self.server_copy_btn = tk.Button(
+            self.server_f,
+            text=f"📋 {self.tr('copy_url')}",
+            font=('Segoe UI', 9),
+            bg=self.COLORS['primary'],
+            fg='white',
+            relief='flat',
+            cursor='hand2',
+            command=self._copy_server_url,
+            padx=10, pady=2
+        )
+        self.server_copy_btn.pack_forget()
+        self.server_copy_btn.bind('<Enter>', lambda e: self.server_copy_btn.configure(bg=self.COLORS['primary_hover']))
+        self.server_copy_btn.bind('<Leave>', lambda e: self.server_copy_btn.configure(bg=self.COLORS['primary']))
+
+        # Update UI based on current server state
+        self._update_server_ui()
+
+    def _on_server_start(self):
+        """Handle start server button click."""
+        if not self._server_root or not os.path.isdir(self._server_root):
+            self.status_var.set("No portal output directory to serve. Generate a portal first.")
+            return
+        self._save_port()
+        if self._start_server(self._server_root, port=self._server_port):
+            self.status_var.set(f"🟢 Server started at http://localhost:{self._server_port}")
+        else:
+            self.status_var.set("❌ Failed to start server")
 
     def build_gen_section(self):
         gen_f = tk.Frame(self.main, bg=self.COLORS['bg'])
@@ -633,6 +844,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                     r = generate_portal(folder_path=self.current_folder, output_dir=out_dir,
                                         max_chars_per_page=per_page, include_skipped=skip,
                                         language=self._lang)
+                    self._server_root = r.get("output_dir", out_dir)
                     self.root.after(0, lambda: self._portal_done(r))
                 except Exception as e:
                     self.root.after(0, lambda: self._gen_err(str(e)))
@@ -717,9 +929,18 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
         hi = idx and os.path.exists(idx)
         msg = f"Portal generated!\n\nOutput: {od}\nPages: {dc}\nSkipped: {sk}\nErrors: {er}\nChars: {tc:,}\n\n"
+
+        # Ask whether to start server
         if hi:
-            if messagebox.askyesno("Success", msg + self.tr('open_folder')):
-                self._open_folder(idx)
+            ask_msg = msg + self.tr('server_ask')
+            if messagebox.askyesno("Success", ask_msg):
+                if self._start_server(od, port=self._server_port):
+                    self.status_var.set(f"🟢 {self.tr('server_running')} http://localhost:{self._server_port}")
+                else:
+                    self.status_var.set("❌ Failed to start server")
+            else:
+                if messagebox.askyesno("Success", msg + self.tr('open_folder')):
+                    self._open_folder(idx)
         else:
             messagebox.showinfo("Done", msg + "No pages generated")
 
