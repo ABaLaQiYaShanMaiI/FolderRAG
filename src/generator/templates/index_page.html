@@ -66,7 +66,7 @@
     .left-panel { flex: none; width: 100%; }
   }
 
-  /* File Tree */
+  /* File Tree — ASCII diagram style with connectors */
   .file-tree-section {
     background: white; border-radius: 10px; padding: 14px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 16px;
@@ -74,15 +74,21 @@
   .tree-title {
     font-size: 0.9em; font-weight: 600; color: #444; margin-bottom: 8px;
   }
-  .tree-list { list-style: none; padding: 0; margin: 0; font-size: 0.82em; line-height: 1.8; }
-  .tree-list li { padding: 1px 0; }
+  .tree-list { list-style: none; padding: 0; margin: 0; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.82em; line-height: 1.9; }
+  .tree-list li { padding: 0; white-space: nowrap; }
+  .tree-prefix { color: #999; user-select: none; }
   .tree-folder { font-weight: 600; color: #1a73e8; }
+  .tree-folder-name { color: #1a73e8; }
   .tree-file { color: #333; }
   .tree-file a { color: #1a73e8; text-decoration: none; }
   .tree-file a:hover { text-decoration: underline; }
   .tree-file.skipped { color: #999; }
   .tree-file.skipped a { color: #999; cursor: default; pointer-events: none; }
-  .tree-size { color: #999; font-size: 0.9em; margin-left: 4px; }
+  .tree-file.skipped .unparsed { color: #999; }
+  /* README files: prominent green highlight */
+  .tree-file.tree-readme a { color: #1b8a3d; font-weight: 600; }
+  .tree-file.tree-readme a::before { content: "⭐ "; }
+  .tree-size { color: #999; font-size: 0.9em; margin-left: 4px; font-family: 'Segoe UI', Arial, sans-serif; }
   .tree-indent { display: inline-block; }
   .sym-fold { color: #1a73e8; margin-right: 2px; }
   .sym-file { color: #888; margin-right: 2px; }

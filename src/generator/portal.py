@@ -288,63 +288,149 @@ def _find_related_docs_via_index(
 
 
 # ============================================================
-#  File tree builder
+#  Filter rules: files to exclude from portal (must be defined
+#  before the functions that reference them)
+# ============================================================
+
+_FILTER_EXTS = frozenset({
+    # Build / dependency artifacts
+    '.pyc', '.pyo', '.pyd', '.so', '.dll', '.dylib',
+    '.obj', '.o', '.a', '.lib', '.exe', '.msi',
+    '.class', '.jar', '.war',
+    '.min.js', '.min.css', '.min.css.map', '.min.js.map',
+    # Logs / caches
+    '.log', '.lock', '.tmp', '.swp', '.swo', '.bak', '.old',
+    # Metadata files
+    '.svg',  # often auto-generated; exclude
+    '.DS_Store', '.directory', '.lst',
+})
+_FILTER_DIRS = frozenset({
+    '.git', '.svn', '.hg', '__pycache__', '.mypy_cache',
+    '.pytest_cache', '.venv', 'venv', 'env', 'node_modules',
+    'bower_components', '.idea', '.vscode', '.vs',
+    '.sass-cache', '.tox', '.eggs', 'eggs',
+    '.ruff_cache', '.mypy_cache',
+})
+_FILTER_FILES = frozenset({
+    '.gitignore', '.gitattributes', '.gitmodules',
+    '.gitkeep', '.gitlab-ci.yml', '.travis.yml', '.github',
+    'LICENSE', 'COPYING', 'AUTHORS',
+    # Thumbs
+    'thumbs.db', 'desktop.ini',
+})
+
+
+def _should_filter_file(rel_path: str) -> bool:
+    """Return True if a file should be excluded from the portal."""
+    parts = rel_path.replace('\\', '/').split('/')
+    # Check ancestor directories
+    for part in parts[:-1]:
+        if part in _FILTER_DIRS or part.startswith('.'):
+            return True
+    fname = parts[-1]
+    # Hidden files (starting with dot)
+    if fname.startswith('.'):
+        return True
+    # Check exact filenames
+    if fname in _FILTER_FILES:
+        return True
+    # Check extensions
+    for ext in _FILTER_EXTS:
+        if fname.endswith(ext):
+            return True
+    return False
+
+
+def _is_readme_file(rel_path: str) -> bool:
+    """Return True if the file is a README."""
+    fname = os.path.basename(rel_path).lower()
+    return fname in ('readme.md', 'readme.txt', 'readme', 'readme.rst', 'readme.markdown')
+
+
+# ============================================================
+#  File tree builder — enhanced with ASCII connector diagram
 # ============================================================
 
 def build_file_tree_html(folder_path: str, docs_dir: str) -> str:
     """
-    Build HTML unordered list of the folder structure.
-    Parsed files link to their doc pages; skipped files are shown grayed out.
+    Build an ASCII-tree diagram of the folder structure.
+    
+    Uses visual connector characters (├── └── │) for human + AI readability.
+    Parsed files link to their doc pages; filtered files are omitted entirely;
+    skipped (unparseable) files are shown grayed out.
+    README files are highlighted as prominent entries.
     """
-    tree = {"_children": {}, "_files": []}
+    lines = []
+    _walk_and_render(folder_path, folder_path, docs_dir, lines, prefix="")
+    return '\n'.join(lines)
 
-    for dirpath, _, filenames in os.walk(folder_path):
-        rel_dir = os.path.relpath(dirpath, folder_path)
-        if rel_dir == ".":
-            rel_dir = ""
-        parts = rel_dir.split(os.sep) if rel_dir else []
 
-        node = tree
-        for p in parts:
-            if p not in node["_children"]:
-                node["_children"][p] = {"_children": {}, "_files": []}
-            node = node["_children"][p]
+def _walk_and_render(root: str, dirpath: str, docs_dir: str,
+                     lines: list, prefix: str):
+    """Recursively walk directory and append tree lines."""
+    items = []
+    try:
+        names = sorted(os.listdir(dirpath), key=str.lower)
+    except PermissionError:
+        return
 
-        for fname in sorted(filenames, key=str.lower):
-            if fname.startswith('.'):
+    for name in names:
+        full_path = os.path.join(dirpath, name)
+        rel_path = os.path.relpath(full_path, root)
+
+        if os.path.isdir(full_path):
+            if name in _FILTER_DIRS or name.startswith('.'):
                 continue
-            full_path = os.path.join(dirpath, fname)
-            if not os.path.isfile(full_path):
+            items.append(('dir', name, full_path, rel_path))
+        else:
+            if _should_filter_file(rel_path):
                 continue
+            items.append(('file', name, full_path, rel_path))
+
+    dirs = [(n, f, r) for t, n, f, r in items if t == 'dir']
+    files = [(n, f, r) for t, n, f, r in items if t == 'file']
+    all_items = dirs + files  # dirs first, then files
+
+    for idx, (name, full_path, rel_path) in enumerate(all_items):
+        is_last = (idx == len(all_items) - 1)
+        connector = '└──' if is_last else '├──'
+        child_prefix = prefix + ('    ' if is_last else '│   ')
+
+        if os.path.isdir(full_path):
+            lines.append(
+                f'<li class="tree-folder">'
+                f'<span class="tree-prefix">{prefix}{connector}</span>'
+                f'<span class="tree-folder-name">📁 {name}</span>'
+                f'</li>'
+            )
+            _walk_and_render(root, full_path, docs_dir, lines, child_prefix)
+        else:
             size = os.path.getsize(full_path)
             size_hr = human_readable_size(size)
-            safe_name = make_safe_filename(full_path, folder_path)
+            safe_name = make_safe_filename(full_path, root)
             doc_link = "docs/%s" % safe_name
             is_parsed = os.path.exists(os.path.join(docs_dir, safe_name))
-            node["_files"].append({
-                "name": fname,
-                "size_hr": size_hr,
-                "doc_link": doc_link if is_parsed else None,
-                "parsed": is_parsed,
-            })
+            is_readme = _is_readme_file(rel_path)
 
-    def _render(node, depth=0):
-        indent = "  " * depth
-        html = ""
-        for fname in sorted(node["_children"].keys()):
-            child = node["_children"][fname]
-            html += '%s<li class="tree-folder">\U0001f4c1 %s</li>\n' % (indent, fname)
-            html += _render(child, depth + 1)
-        for f in node["_files"]:
-            if f["parsed"] and f["doc_link"]:
-                html += '%s<li class="tree-file">\U0001f4c4 <a href="%s">%s</a> <span class="tree-size">%s</span></li>\n' % (
-                    indent, f["doc_link"], f["name"], f["size_hr"])
+            css_class = 'tree-file'
+            if not is_parsed:
+                css_class += ' skipped'
+            if is_readme:
+                css_class += ' tree-readme'
+
+            if is_parsed and doc_link:
+                link_html = f'<a href="{doc_link}">📄 {name}</a>'
             else:
-                html += '%s<li class="tree-file skipped">\u23ed\ufe0f %s <span class="tree-size">%s</span></li>\n' % (
-                    indent, f["name"], f["size_hr"])
-        return html
+                link_html = f'<span class="unparsed">⏭️ {name}</span>'
 
-    return _render(tree)
+            prefix_escaped = prefix.replace('<', '<').replace('>', '>')
+            lines.append(
+                f'<li class="{css_class}">'
+                f'<span class="tree-prefix">{prefix_escaped}{connector}</span>'
+                f'{link_html}'
+                f'<span class="tree-size"> {size_hr}</span>'
+                f'</li>'
+            )
 
 
 # ============================================================
