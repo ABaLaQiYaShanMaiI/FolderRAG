@@ -135,7 +135,6 @@ class TestPortalMode:
 
         rc, stdout, stderr = _run_generate([
             folder, "--portal", "-o", output_dir,
-            "--max-chars-per-page", "50000"
         ])
 
         assert rc == 0, f"Expected exit code 0, got {rc}. stderr: {stderr}"
@@ -151,21 +150,27 @@ class TestPortalMode:
         assert "sample_docs" in content
 
     def test_portal_page_creation(self, tmp_path):
-        """Verify that doc pages are created for each file."""
+        """Verify that portal is single-page: no docs/ dir, all content in index.html."""
         folder = _create_sample_folder(str(tmp_path))
         output_dir = os.path.join(str(tmp_path), "portal_pages")
 
         rc, stdout, stderr = _run_generate([
             folder, "--portal", "-o", output_dir,
-            "--max-chars-per-page", "50000"
         ])
         assert rc == 0
 
-        # Check that individual doc HTML files were created in docs/ subdirectory
+        # Portal is single-page — no docs/ subdirectory
         docs_dir = os.path.join(output_dir, "docs")
-        assert os.path.isdir(docs_dir), f"docs/ subdirectory not found in {os.listdir(output_dir)}"
-        doc_files = [f for f in os.listdir(docs_dir) if f.endswith(".html")]
-        assert len(doc_files) > 0, f"No doc pages created in docs/. Contents: {os.listdir(docs_dir)}"
+        assert not os.path.isdir(docs_dir), f"docs/ subdirectory should NOT exist (single-page portal)"
+
+        # All content is in index.html
+        index_path = os.path.join(output_dir, "index.html")
+        assert os.path.isfile(index_path), "index.html should exist"
+        with open(index_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        # Verify file contents are embedded directly in index.html
+        assert "hello.txt" in content, "hello.txt content should be in index.html"
+        assert "readme.md" in content, "readme.md content should be in index.html"
 
     def test_portal_skipped_flag(self, tmp_path):
         """Verify --no-skipped hides unsupported file markers."""
@@ -187,7 +192,6 @@ class TestPortalMode:
 
         rc, stdout, stderr = _run_generate([
             folder, "--portal", "-o", output_dir,
-            "--max-chars-per-page", "10"  # Very small to force page splitting
         ])
         assert rc == 0
         # With such small per-page limit, we may get multiple pages for each file

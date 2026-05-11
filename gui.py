@@ -860,7 +860,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             try:
                 html, parsed, skipped, errors, chars = build_html_from_files(
                     self.current_folder, self.file_list, out,
-                    max_chars=max_chars, include_skipped=skip)
+                    max_chars=max_chars, include_skipped=skip, language=self._lang)
                 with open(out, 'w', encoding='utf-8') as f:
                     f.write(html)
                 self.root.after(0, lambda: self.prog.config(value=100))

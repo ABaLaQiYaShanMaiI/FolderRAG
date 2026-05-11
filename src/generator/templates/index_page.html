@@ -449,8 +449,15 @@ function collapseAll() {
 
 // ── Jump to file content from tree ──
 function jumpToFile(filename) {
-  // Escape special characters for CSS selector (use CSS.escape polyfill approach)
-  const escaped = filename.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  // Use CSS.escape for safe attribute matching, with a polyfill fallback
+  function cssEscape(value) {
+    if (typeof CSS !== 'undefined' && CSS.escape) {
+      return CSS.escape(value);
+    }
+    // Polyfill: escape all special CSS selector characters
+    return String(value).replace(/([!"#$%&'()*+,.\/:;<=>?@[\]^`{|}~\\])/g, '\\$1');
+  }
+  const escaped = cssEscape(filename);
   const block = document.querySelector(`.doc-block[data-filename="${escaped}"]`);
   if (block) {
     // Expand this block if not already

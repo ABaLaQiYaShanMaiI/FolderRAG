@@ -243,15 +243,29 @@ def escape_html(s: str) -> str:
 #  File tree builder
 # ============================================================
 
-def build_file_tree_html(folder_path: str) -> str:
-    """Build an ASCII-tree diagram of the folder structure."""
+def build_file_tree_html(folder_path: str, parsed_files: set = None) -> str:
+    """Build an ASCII-tree diagram of the folder structure.
+    
+    Args:
+        folder_path: Root folder to scan
+        parsed_files: Set of relative paths that were successfully parsed.
+                      Files not in this set will appear grey and unclickable.
+    """
     lines = []
-    _walk_and_render(folder_path, folder_path, lines, prefix="")
+    _walk_and_render(folder_path, folder_path, lines, prefix="", parsed_files=parsed_files or set())
     return '\n'.join(lines)
 
 
-def _walk_and_render(root: str, dirpath: str, lines: list, prefix: str):
-    """Recursively walk directory and append tree lines."""
+def _walk_and_render(root: str, dirpath: str, lines: list, prefix: str, parsed_files: set = None):
+    """Recursively walk directory and append tree lines.
+    
+    Args:
+        parsed_files: Set of relative paths that were successfully parsed.
+                      Files not in this set appear grey and unclickable.
+    """
+    if parsed_files is None:
+        parsed_files = set()
+
     items = []
     try:
         names = sorted(os.listdir(dirpath), key=str.lower)
@@ -287,18 +301,25 @@ def _walk_and_render(root: str, dirpath: str, lines: list, prefix: str):
                 f'<span class="tree-folder-name">📁 {name}</span>'
                 f'</li>'
             )
-            _walk_and_render(root, full_path, lines, child_prefix)
+            _walk_and_render(root, full_path, lines, child_prefix, parsed_files)
         else:
             size = os.path.getsize(full_path)
             size_hr = human_readable_size(size)
             is_readme = _is_readme_file(rel_path)
 
+            # Check if this file was successfully parsed
+            is_parsed = rel_path in parsed_files
             css_class = 'tree-file'
             if is_readme:
                 css_class += ' tree-readme'
+            if not is_parsed:
+                css_class += ' skipped'
 
             safe_filename = escape_html(rel_path.replace('\\', '/'))
-            link_html = f'<a onclick="jumpToFile(\'{safe_filename}\')">📄 {name}</a>'
+            if is_parsed:
+                link_html = f'<a onclick="jumpToFile(\'{safe_filename}\')">📄 {name}</a>'
+            else:
+                link_html = f'<span class="unparsed">⏭️ {name}</span>'
 
             lines.append(
                 f'<li class="{css_class}">'
@@ -396,15 +417,22 @@ def generate_portal(
 
         char_count = len(text)
         # Truncate extremely large files to prevent page bloat
-        # Use line-based truncation to preserve code structure
+        # Use byte-aware truncation to avoid breaking multi-byte characters
+        # and always cut at a line boundary to preserve code structure
         if MAX_CHARS_PER_FILE and char_count > MAX_CHARS_PER_FILE:
-            # Find the last line boundary before MAX_CHARS_PER_FILE
+            # First, safely truncate at a newline boundary, never in the middle of a multi-byte char
             truncated = text[:MAX_CHARS_PER_FILE]
+            # Ensure we don't break a multi-byte UTF-8 character: walk back to a valid boundary
+            # by ensuring the last character isn't a continuation byte
+            while len(truncated) > 0:
+                last_byte = truncated[-1].encode('utf-8')[-1]
+                if (last_byte & 0xC0) != 0x80:  # Not a continuation byte → safe boundary
+                    break
+                truncated = truncated[:-1]  # Remove the continuation byte
             last_newline = truncated.rfind('\n')
             if last_newline > MAX_CHARS_PER_FILE * 0.5:  # Only use line boundary if reasonable
-                text = truncated[:last_newline]
-            else:
-                text = truncated
+                truncated = truncated[:last_newline]
+            text = truncated
             text += (
                 f"\n\n... [截断：原文 {char_count:,} 字符，仅展示前 {MAX_CHARS_PER_FILE:,} 字符] ...\n"
                 f"... [Truncated: original {char_count:,} chars, showing first {MAX_CHARS_PER_FILE:,} chars] ..."
@@ -450,7 +478,9 @@ def generate_portal(
     if error_count:
         print(f"  [Error Summary] {error_count} file(s) failed to parse")
 
-    file_tree_html = build_file_tree_html(folder_path) if include_skipped else ""
+    # Build file tree with parsed file paths, so skipped/unparsed files appear grey
+    parsed_paths = {d["file"] for d in docs_meta if not d.get("skipped")}
+    file_tree_html = build_file_tree_html(folder_path, parsed_files=parsed_paths) if include_skipped else ""
     file_contents_html = build_file_content_blocks(docs_texts)
 
     if docs_meta or file_tree_html:

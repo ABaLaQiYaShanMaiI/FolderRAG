@@ -44,28 +44,31 @@ def _get_mime_checker():
     if _mime_checker_cache is not None:
         return _mime_checker_cache
 
-    # Fallback extensions when python-magic is unavailable
-    FALLBACK_EXTS = {
-        '.txt', '.md', '.html', '.htm', '.json', '.xml', '.csv',
-        '.yaml', '.yml', '.toml', '.ini', '.log', '.cfg', '.conf',
-        '.py', '.pyw', '.js', '.jsx', '.ts', '.tsx', '.css', '.scss', '.less',
-        '.sh', '.bash', '.zsh', '.fish', '.bat', '.cmd', '.ps1', '.psm1', '.psd1',
-        '.rb', '.java', '.c', '.cpp', '.h', '.hpp', '.cc', '.cxx', '.hh', '.hxx',
-        '.rs', '.go', '.php', '.swift', '.kt', '.kts', '.scala',
-        '.cs', '.fs', '.vb', '.dart', '.lua', '.r', '.R', '.m', '.mm',
-        '.hs', '.erl', '.hrl', '.ex', '.exs', '.elm', '.clj', '.cljs',
-        '.sql', '.ddl', '.dml', '.pl', '.pm', '.tcl',
-        '.markdown', '.rst', '.text', '.tsv',
-        '.pdf',
-        '.docx', '.pptx', '.xlsx',
-        # Training / ML text config files
-        '.prototxt', '.pbtxt', '.solver', '.trainval', '.test',
-        '.cfg',
-        # .NET project & solution files (XML/text)
-        '.csproj', '.fsproj', '.vbproj',
-        '.sln', '.suo', '.user', '.vsconfig',
-        '.xaml', '.axaml',
-    }
+    # Use shared extension list from constants module to avoid duplication
+    try:
+        from src.constants import SUPPORTED_TEXT_EXTS
+        FALLBACK_EXTS = SUPPORTED_TEXT_EXTS
+    except ImportError:
+        # Fallback if constants module unavailable
+        FALLBACK_EXTS = {
+            '.txt', '.md', '.html', '.htm', '.json', '.xml', '.csv',
+            '.yaml', '.yml', '.toml', '.ini', '.log', '.cfg', '.conf',
+            '.py', '.pyw', '.js', '.jsx', '.ts', '.tsx', '.css', '.scss', '.less',
+            '.sh', '.bash', '.zsh', '.fish', '.bat', '.cmd', '.ps1', '.psm1', '.psd1',
+            '.rb', '.java', '.c', '.cpp', '.h', '.hpp', '.cc', '.cxx', '.hh', '.hxx',
+            '.rs', '.go', '.php', '.swift', '.kt', '.kts', '.scala',
+            '.cs', '.fs', '.vb', '.dart', '.lua', '.r', '.R', '.m', '.mm',
+            '.hs', '.erl', '.hrl', '.ex', '.exs', '.elm', '.clj', '.cljs',
+            '.sql', '.ddl', '.dml', '.pl', '.pm', '.tcl',
+            '.markdown', '.rst', '.text', '.tsv',
+            '.pdf',
+            '.docx', '.pptx', '.xlsx',
+            '.prototxt', '.pbtxt', '.solver', '.trainval', '.test',
+            '.cfg',
+            '.csproj', '.fsproj', '.vbproj',
+            '.sln', '.suo', '.user', '.vsconfig',
+            '.xaml', '.axaml',
+        }
     try:
         import magic
         checker = magic.Magic(mime=True)
