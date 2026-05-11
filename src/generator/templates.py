@@ -25,22 +25,55 @@ def _get_file_type(filename: str) -> str:
     """Determine file type from extension."""
     ext = os.path.splitext(filename)[1].lower()
     type_map = {
+        # Office / PDF
         '.pdf': 'PDF', '.docx': 'DOCX', '.doc': 'DOC',
-        '.txt': 'TXT', '.md': 'Markdown',
-        '.py': 'Python', '.js': 'JavaScript', '.ts': 'TypeScript',
-        '.html': 'HTML', '.css': 'CSS', '.json': 'JSON',
-        '.xml': 'XML', '.yaml': 'YAML', '.yml': 'YAML',
-        '.csv': 'CSV', '.xlsx': 'Excel', '.xls': 'Excel',
         '.pptx': 'PowerPoint', '.ppt': 'PowerPoint',
-        '.rtf': 'RTF', '.log': 'Log',
-        '.cfg': 'Config', '.ini': 'Config', '.conf': 'Config',
-        '.sh': 'Shell Script', '.bat': 'Batch', '.ps1': 'PowerShell',
-        '.sql': 'SQL', '.rb': 'Ruby', '.java': 'Java',
+        '.xlsx': 'Excel', '.xls': 'Excel',
+        '.rtf': 'RTF',
+        # Text / Markup
+        '.txt': 'TXT', '.md': 'Markdown', '.rst': 'reStructuredText',
+        '.html': 'HTML', '.htm': 'HTML', '.xhtml': 'XHTML',
+        '.css': 'CSS', '.scss': 'SCSS', '.less': 'Less', '.sass': 'Sass',
+        '.json': 'JSON', '.xml': 'XML', '.yaml': 'YAML', '.yml': 'YAML',
+        '.toml': 'TOML', '.ini': 'Config', '.cfg': 'Config', '.conf': 'Config',
+        '.csv': 'CSV', '.tsv': 'TSV',
+        # Scripting / Programming
+        '.py': 'Python', '.pyw': 'Python',
+        '.js': 'JavaScript', '.jsx': 'JSX',
+        '.ts': 'TypeScript', '.tsx': 'TSX',
+        '.sh': 'Shell Script', '.bash': 'Bash', '.zsh': 'Zsh', '.fish': 'Fish',
+        '.bat': 'Batch', '.cmd': 'Batch', '.ps1': 'PowerShell', '.psm1': 'PowerShell Module', '.psd1': 'PowerShell Data',
+        '.vbs': 'VBScript',
+        # C-family
+        '.cs': 'C#', '.fs': 'F#', '.vb': 'VB.NET',
         '.cpp': 'C++', '.c': 'C', '.h': 'C Header',
-        '.go': 'Go', '.rs': 'Rust', '.php': 'PHP',
-        '.swift': 'Swift', '.kt': 'Kotlin', '.scala': 'Scala',
-        '.r': 'R', '.lua': 'Lua',
-        '.toml': 'TOML', '.lock': 'Lock File',
+        '.hpp': 'C++ Header', '.cc': 'C++', '.cxx': 'C++', '.hh': 'C++ Header', '.hxx': 'C++ Header',
+        # Java & JVM
+        '.java': 'Java', '.kt': 'Kotlin', '.kts': 'Kotlin Script',
+        '.scala': 'Scala', '.groovy': 'Groovy',
+        '.clj': 'Clojure', '.cljs': 'ClojureScript',
+        # Functional
+        '.hs': 'Haskell', '.lhs': 'Literate Haskell',
+        '.erl': 'Erlang', '.hrl': 'Erlang Header',
+        '.ex': 'Elixir', '.exs': 'Elixir Script', '.elm': 'Elm',
+        # Mobile
+        '.swift': 'Swift', '.dart': 'Dart',
+        # Web / Server
+        '.php': 'PHP', '.phtml': 'PHP',
+        '.rb': 'Ruby', '.pl': 'Perl', '.pm': 'Perl Module',
+        '.tcl': 'Tcl',
+        '.sql': 'SQL', '.ddl': 'SQL DDL', '.dml': 'SQL DML',
+        '.lua': 'Lua',
+        # Systems
+        '.go': 'Go', '.rs': 'Rust',
+        '.r': 'R', '.R': 'R', '.m': 'MATLAB', '.mm': 'Objective-C++',
+        # Data / ML text config
+        '.prototxt': 'Caffe Proto', '.pbtxt': 'Protobuf Text',
+        '.solver': 'Caffe Solver', '.trainval': 'Training Config',
+        '.test': 'Test Config', '.weights': 'Weights Config',
+        # Config
+        '.log': 'Log', '.lock': 'Lock File',
+        '.markdown': 'Markdown', '.text': 'Text',
     }
     return type_map.get(ext, ext.upper().lstrip('.').replace('.', '') if ext else 'Unknown')
 
@@ -49,19 +82,39 @@ def _get_file_type_icon(file_type: str) -> str:
     """Return an emoji icon for the given file type."""
     icon_map = {
         'PDF': '📕', 'DOCX': '📘', 'DOC': '📘',
-        'TXT': '📄', 'Markdown': '📝',
+        'TXT': '📄', 'Markdown': '📝', 'reStructuredText': '📝',
         'Python': '🐍', 'JavaScript': '🟨', 'TypeScript': '🔵',
-        'HTML': '🌐', 'CSS': '🎨', 'JSON': '📋',
-        'XML': '📰', 'YAML': '⚙️',
-        'CSV': '📊', 'Excel': '📊',
+        'JSX': '⚛️', 'TSX': '⚛️',
+        'HTML': '🌐', 'XHTML': '🌐', 'CSS': '🎨',
+        'SCSS': '🎨', 'Less': '🎨', 'Sass': '🎨',
+        'JSON': '📋', 'XML': '📰', 'YAML': '⚙️',
+        'CSV': '📊', 'TSV': '📊', 'Excel': '📊',
         'PowerPoint': '📽️',
         'Log': '📃', 'Config': '⚙️',
-        'Shell Script': '💻', 'Batch': '💻', 'PowerShell': '💻',
-        'SQL': '🗃️', 'Ruby': '💎', 'Java': '☕',
+        'Shell Script': '💻', 'Bash': '💻', 'Zsh': '💻', 'Fish': '💻',
+        'Batch': '💻', 'PowerShell': '💻', 'PowerShell Module': '💻',
+        'PowerShell Data': '💻', 'VBScript': '💻',
+        'SQL': '🗃️', 'SQL DDL': '🗃️', 'SQL DML': '🗃️',
+        'Ruby': '💎', 'Java': '☕',
+        'C#': '🔷', 'F#': '🔷', 'VB.NET': '🔷',
         'C++': '⚡', 'C': '⚡', 'C Header': '⚡',
+        'C++ Header': '⚡',
         'Go': '🔷', 'Rust': '🦀', 'PHP': '🐘',
-        'Swift': '🍎', 'Kotlin': '🅺',
+        'Swift': '🍎', 'Kotlin': '🅺', 'Kotlin Script': '🅺',
+        'Scala': '🔺', 'Groovy': '🔺',
+        'Clojure': '🍃', 'ClojureScript': '🍃',
+        'Haskell': 'λ', 'Literate Haskell': 'λ',
+        'Erlang': '🟠', 'Erlang Header': '🟠',
+        'Elixir': '💧', 'Elixir Script': '💧', 'Elm': '🌳',
+        'Dart': '🎯', 'Flutter': '🦋',
+        'Perl': '🐪', 'Perl Module': '🐪',
+        'Tcl': '🔧', 'Lua': '🌙',
+        'R': '📊', 'MATLAB': '📐', 'Objective-C++': '🍎',
         'TOML': '⚙️', 'Lock File': '🔒',
+        'Caffe Proto': '🧠', 'Protobuf Text': '🧠',
+        'Caffe Solver': '🧠', 'Training Config': '🧠',
+        'Test Config': '🧠', 'Weights Config': '🧠',
+        'Text': '📄',
     }
     return icon_map.get(file_type, '📄')
 

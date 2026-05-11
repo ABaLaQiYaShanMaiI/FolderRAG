@@ -41,10 +41,19 @@ def _get_mime_checker():
     FALLBACK_EXTS = {
         '.txt', '.md', '.html', '.htm', '.json', '.xml', '.csv',
         '.yaml', '.yml', '.toml', '.ini', '.log', '.cfg', '.conf',
-        '.py', '.js', '.ts', '.css', '.sh', '.bat', '.ps1', '.rb',
-        '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.go', '.php',
+        '.py', '.pyw', '.js', '.jsx', '.ts', '.tsx', '.css', '.scss', '.less',
+        '.sh', '.bash', '.zsh', '.fish', '.bat', '.cmd', '.ps1', '.psm1', '.psd1',
+        '.rb', '.java', '.c', '.cpp', '.h', '.hpp', '.cc', '.cxx', '.hh', '.hxx',
+        '.rs', '.go', '.php', '.swift', '.kt', '.kts', '.scala',
+        '.cs', '.fs', '.vb', '.dart', '.lua', '.r', '.R', '.m', '.mm',
+        '.hs', '.erl', '.hrl', '.ex', '.exs', '.elm', '.clj', '.cljs',
+        '.sql', '.ddl', '.dml', '.pl', '.pm', '.tcl',
+        '.markdown', '.rst', '.text', '.tsv',
         '.pdf',
         '.docx', '.pptx', '.xlsx',
+        # Training / ML text config files
+        '.prototxt', '.pbtxt', '.solver', '.trainval', '.test',
+        '.weights', '.cfg',
     }
     try:
         import magic  # type: ignore[import-untyped]
