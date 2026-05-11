@@ -97,6 +97,29 @@ def _build_toc_html(text: str) -> str:
     return "\n".join(parts)
 
 
+def _build_doc_sitemap_html(all_docs_meta: list, current_title: str = "", index_link: str = "../index.html") -> str:
+    """Build a compact AI-readable sitemap for doc pages showing all documents."""
+    if not all_docs_meta:
+        return ""
+    parts = []
+    parts.append('<nav id="sitemap" aria-label="Document Index" style="margin-top:20px;padding:12px 16px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:8px;font-size:0.82em;">')
+    parts.append(f'<div style="font-weight:600;color:#1a73e8;margin-bottom:6px;">📑 Full Document Index ({len([d for d in all_docs_meta if not d.get("skipped")])} pages)</div>')
+    parts.append(f'<div><a href="{escape(index_link)}" style="color:#1a73e8;">🏠 Back to Home</a></div>')
+    parts.append('<ul style="list-style:none;padding:0;margin:6px 0 0 0;display:flex;flex-wrap:wrap;gap:4px;">')
+    for doc in all_docs_meta:
+        if doc.get("skipped") or not doc.get("file"):
+            continue
+        d_title = escape(doc.get("title", ""))
+        d_link = escape(doc.get("file", "").replace("docs/", "", 1))
+        # Highlight current doc
+        is_current = (d_title == current_title or d_title.startswith(current_title))
+        style = 'font-weight:bold;color:#d32f2f;' if is_current else 'color:#1a73e8;text-decoration:none;'
+        parts.append(f'<li><a href="{d_link}" style="{style}">📄 {d_title}</a></li>')
+    parts.append('</ul>')
+    parts.append('</nav>')
+    return "\n".join(parts)
+
+
 def _build_related_docs_html(current_title: str, current_keywords: list, all_docs_meta: list, max_items: int = 5) -> str:
     """Find related documents based on keyword overlap (Jaccard similarity)."""
     if not current_keywords or not all_docs_meta:
@@ -161,25 +184,8 @@ def wrap_doc_html(
     part_idx: int = 0,
     all_docs_meta: list = None,
 ) -> str:
-    # Inject anchor IDs into headings so TOC links work
-    def _inject_heading_anchors(t: str) -> str:
-        """Add <a id="..."> before each Markdown heading so TOC links can jump to them."""
-        lines = t.split('\n')
-        result_lines = []
-        for line in lines:
-            m = re.match(r'^(#{1,4})\s+(.+)$', line)
-            if m:
-                title_text = m.group(2).strip()
-                anchor_id = re.sub(r'[^\w\u4e00-\u9fff\- ]', '', title_text.lower())
-                anchor_id = re.sub(r'\s+', '-', anchor_id)
-                result_lines.append(f'<a id="{anchor_id}"></a>{line}')
-            else:
-                result_lines.append(line)
-        return '\n'.join(result_lines)
-
-    text_with_anchors = _inject_heading_anchors(text)
     escaped_title = escape(title)
-    escaped_text = escape(text_with_anchors)
+    escaped_text = escape(text)
     escaped_folder = escape(folder_name)
     title_parts = title.replace('\\', '/').split('/')
     breadcrumb_name = title_parts[-1] if title_parts else title
@@ -387,6 +393,9 @@ def wrap_doc_html(
     result = result.replace("$progress_bar_html", progress_bar_html)
     result = result.replace("$toc_html", toc_html)
     result = result.replace("$related_docs_html", related_docs_html)
+    # AI sitemap: a compact list of all docs for AI crawler navigation
+    sitemap_html = _build_doc_sitemap_html(all_docs_meta or [], current_title=title, index_link=index_link)
+    result = result.replace("$sitemap_html", sitemap_html)
     return result
 
 
