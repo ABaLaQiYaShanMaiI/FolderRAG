@@ -35,6 +35,41 @@ def human_readable_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f} TB"
 
 
+# ── Import shared filter rules from constants ──
+try:
+    from src.constants import SUPPORTED_TEXT_EXTS, should_filter_dir, should_filter_file
+    FALLBACK_EXTS = SUPPORTED_TEXT_EXTS
+except ImportError:
+    # Minimal fallback when constants module is unavailable
+    FALLBACK_EXTS = {
+        '.txt', '.md', '.html', '.htm', '.json', '.xml', '.csv',
+        '.yaml', '.yml', '.toml', '.ini', '.log', '.cfg', '.conf',
+        '.py', '.pyw', '.js', '.jsx', '.ts', '.tsx', '.css', '.scss', '.less',
+        '.sh', '.bash', '.zsh', '.fish', '.bat', '.cmd', '.ps1', '.psm1', '.psd1',
+        '.rb', '.java', '.c', '.cpp', '.h', '.hpp', '.cc', '.cxx', '.hh', '.hxx',
+        '.rs', '.go', '.php', '.swift', '.kt', '.kts', '.scala',
+        '.cs', '.fs', '.vb', '.dart', '.lua', '.r', '.R', '.m', '.mm',
+        '.hs', '.erl', '.hrl', '.ex', '.exs', '.elm', '.clj', '.cljs',
+        '.sql', '.ddl', '.dml', '.pl', '.pm', '.tcl',
+        '.markdown', '.rst', '.text', '.tsv',
+        '.pdf',
+        '.docx', '.pptx', '.xlsx',
+        '.prototxt', '.pbtxt', '.solver', '.trainval', '.test',
+        '.cfg',
+        '.csproj', '.fsproj', '.vbproj',
+        '.sln', '.suo', '.user', '.vsconfig',
+        '.xaml', '.axaml',
+    }
+
+    def should_filter_dir(dirname: str) -> bool:
+        """Fallback: skip dot-prefixed directories."""
+        return dirname.startswith('.')
+
+    def should_filter_file(rel_path: str) -> bool:
+        """Fallback: skip dot-prefixed files."""
+        return os.path.basename(rel_path).startswith('.')
+
+
 def _get_mime_checker():
     """
     Initialize MIME type checker with fallback extensions (cached).
@@ -44,31 +79,6 @@ def _get_mime_checker():
     if _mime_checker_cache is not None:
         return _mime_checker_cache
 
-    # Use shared extension list from constants module to avoid duplication
-    try:
-        from src.constants import SUPPORTED_TEXT_EXTS
-        FALLBACK_EXTS = SUPPORTED_TEXT_EXTS
-    except ImportError:
-        # Fallback if constants module unavailable
-        FALLBACK_EXTS = {
-            '.txt', '.md', '.html', '.htm', '.json', '.xml', '.csv',
-            '.yaml', '.yml', '.toml', '.ini', '.log', '.cfg', '.conf',
-            '.py', '.pyw', '.js', '.jsx', '.ts', '.tsx', '.css', '.scss', '.less',
-            '.sh', '.bash', '.zsh', '.fish', '.bat', '.cmd', '.ps1', '.psm1', '.psd1',
-            '.rb', '.java', '.c', '.cpp', '.h', '.hpp', '.cc', '.cxx', '.hh', '.hxx',
-            '.rs', '.go', '.php', '.swift', '.kt', '.kts', '.scala',
-            '.cs', '.fs', '.vb', '.dart', '.lua', '.r', '.R', '.m', '.mm',
-            '.hs', '.erl', '.hrl', '.ex', '.exs', '.elm', '.clj', '.cljs',
-            '.sql', '.ddl', '.dml', '.pl', '.pm', '.tcl',
-            '.markdown', '.rst', '.text', '.tsv',
-            '.pdf',
-            '.docx', '.pptx', '.xlsx',
-            '.prototxt', '.pbtxt', '.solver', '.trainval', '.test',
-            '.cfg',
-            '.csproj', '.fsproj', '.vbproj',
-            '.sln', '.suo', '.user', '.vsconfig',
-            '.xaml', '.axaml',
-        }
     try:
         import magic
         checker = magic.Magic(mime=True)
@@ -108,19 +118,27 @@ def collect_files_info(root_dir: str) -> tuple:
     """
     Scan folder and return (file_list, total_size).
     Each file info dict contains: path, rel_path, size, size_hr, ext, supported.
+
+    Applies the same filter rules as portal mode:
+    - Skips hidden/cache dirs (FILTER_DIRS, dot-prefixed dirs)
+    - Skips hidden/cache files (FILTER_FILES, FILTER_EXTS, dot-prefixed files)
     """
     file_list = []
     total_size = 0
 
     try:
-        for dirpath, _, filenames in os.walk(root_dir):
+        for dirpath, dirnames, filenames in os.walk(root_dir):
+            # Filter directories in-place to avoid descending into cache/hidden dirs
+            dirnames[:] = [d for d in dirnames if not should_filter_dir(d)]
+
             for fname in filenames:
-                if fname.startswith('.'):
-                    continue
                 full_path = os.path.join(dirpath, fname)
                 if not os.path.isfile(full_path):
                     continue
                 rel_path = os.path.relpath(full_path, root_dir)
+                # Apply file-level filter (same rules as portal._should_filter_file)
+                if should_filter_file(rel_path):
+                    continue
                 file_size = os.path.getsize(full_path)
                 ext = os.path.splitext(fname)[1].lower()
                 supported = is_file_supported(full_path, ext)
@@ -291,6 +309,101 @@ def build_html_from_files(
         "</html>"
     )
     return html, parsed_count, skipped_count, error_count, total_chars
+
+
+def build_text_from_files(
+    folder_path: str,
+    file_list: list,
+    max_chars: int = None,
+    include_skipped: bool = False,
+) -> tuple:
+    """Generate plain text output, each file wrapped with metadata separator + content.
+
+    Returns (text, parsed_count, skipped_count, error_count, total_chars).
+    """
+    parts = []
+    total_chars = 0
+    parsed_count = 0
+    skipped_count = 0
+    error_count = 0
+    hit_limit = False
+    separator = "=" * 60  # separator between files
+
+    for finfo in file_list:
+        if hit_limit:
+            break
+
+        if not finfo['supported']:
+            skipped_count += 1
+            if include_skipped:
+                parts.append(
+                    f"{separator}\n"
+                    f"[SKIPPED] {finfo['rel_path']} "
+                    f"(Size: {finfo['size_hr']})\n"
+                    f"{separator}\n"
+                )
+            continue
+
+        try:
+            if HAS_PARSER:
+                result = parse_file(finfo['path'])
+                if result is None:
+                    skipped_count += 1
+                    continue
+                text = (result.get("text") or "").strip()
+            else:
+                with open(finfo['path'], 'r', encoding='utf-8', errors='replace') as f:
+                    text = f.read()
+
+            if not text:
+                skipped_count += 1
+                continue
+
+            # Length truncation (consistent with HTML version logic)
+            file_chars = len(text)
+            if max_chars is not None and total_chars + file_chars > max_chars:
+                allowed = max_chars - total_chars
+                if allowed <= 0:
+                    break
+                text = text[:allowed]
+                hit_limit = True
+            else:
+                hit_limit = False
+
+            # Build file block
+            file_info = (
+                f"{separator}\n"
+                f"File: {finfo['rel_path']}\n"
+                f"Size: {finfo['size_hr']}\n"
+                f"Characters: {file_chars:,}\n"
+                f"Type: {os.path.splitext(finfo['rel_path'])[1] or 'plain'}\n"
+                f"{separator}\n"
+                f"{text}\n\n"
+            )
+            parts.append(file_info)
+            total_chars += len(text)
+            parsed_count += 1
+
+            if hit_limit and max_chars:
+                parts.append(
+                    f"\n... [Truncated at {max_chars:,} characters] ...\n"
+                )
+                break
+
+        except Exception:
+            error_count += 1
+
+    # Header info
+    header = (
+        f"Folder Knowledge Export\n"
+        f"Source: {os.path.abspath(folder_path)}\n"
+        f"Parsed files: {parsed_count}\n"
+        f"Skipped files: {skipped_count}\n"
+        f"Errors: {error_count}\n"
+        f"Total characters: {total_chars:,}\n"
+        f"{'=' * 60}\n\n"
+    )
+    return header + ''.join(parts), parsed_count, skipped_count, error_count, total_chars
 
 
 def _(zh: str, en: str) -> str:

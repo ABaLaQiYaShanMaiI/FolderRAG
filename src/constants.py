@@ -5,6 +5,7 @@ Single source of truth for file extension sets, filter rules, and type mappings.
 
 import os
 
+
 # ── File extensions supported for text parsing ──
 # Used by gui_scanner.py (fallback when magic unavailable) and dispatcher.py
 SUPPORTED_TEXT_EXTS = frozenset({
@@ -175,3 +176,41 @@ FILE_TYPE_ICONS = {
     'Test Config': '🧠',
     'Text': '📄',
 }
+
+
+# ════════════════════════════════════════════════════════════════
+#  Shared filtering functions — single source of truth for all modes
+# ════════════════════════════════════════════════════════════════
+
+def should_filter_dir(dirname: str) -> bool:
+    """Return True if a directory should be excluded from traversal."""
+    return dirname in FILTER_DIRS or dirname.startswith('.')
+
+
+def should_filter_file(rel_path: str) -> bool:
+    """Return True if a file should be excluded from scanning/portal.
+    
+    Checks directory part, file name, and file extension.
+    rel_path: relative path from root (forward-slash separated).
+    """
+    parts = rel_path.replace('\\', '/').split('/')
+    # Check directory components
+    for part in parts[:-1]:
+        if part in FILTER_DIRS or part.startswith('.'):
+            return True
+    # Check file name
+    fname = parts[-1]
+    if fname.startswith('.'):
+        return True
+    if fname in FILTER_FILES:
+        return True
+    # Check file extension
+    for ext in FILTER_EXTS:
+        if fname.endswith(ext):
+            return True
+    return False
+
+
+def filter_dirnames(dirnames: list) -> None:
+    """Filter dirnames list in-place (for os.walk)."""
+    dirnames[:] = [d for d in dirnames if not should_filter_dir(d)]

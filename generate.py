@@ -22,7 +22,6 @@ import pathlib
 import argparse
 import logging
 import io
-from html import escape
 
 # Fix console encoding for Windows (防止中文乱码)
 if sys.platform == 'win32':
@@ -32,15 +31,20 @@ if sys.platform == 'win32':
 # Ensure the project root is on sys.path so the src package is always findable
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from src.parser.dispatcher import parse_file
+from src.gui_scanner import build_text_from_files, collect_files_info
 
-# Try to import portal generator and shared filtering
+# Import shared filter rules from constants
 try:
-    from src.generator.portal import generate_portal, _FILTER_DIRS, _should_filter_file
-    HAS_PORTAL = True
+    from src.constants import FILTER_DIRS as _FILTER_DIRS, should_filter_file as _should_filter_file
 except ImportError:
     _FILTER_DIRS = frozenset()
     _should_filter_file = lambda rel_path: False
+
+# Try to import portal generator
+try:
+    from src.generator.portal import generate_portal
+    HAS_PORTAL = True
+except ImportError:
     HAS_PORTAL = False
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -63,86 +67,13 @@ def collect_files(root_dir):
                 yield full_path, rel_path
 
 
-def build_html(folder_path, max_chars=None):
-    """Parse all files under folder_path and return a complete HTML string."""
-    articles = []
-    total_chars = 0
-    hit_limit = False
-
-    for full_path, rel_path in collect_files(folder_path):
-        if hit_limit:
-            break
-
-        logger.info("Parsing: %s", rel_path)
-
-        try:
-            result = parse_file(full_path)
-        except Exception:
-            logger.exception("Error parsing %s", rel_path)
-            continue
-
-        if result is None:
-            logger.info("  -> Skipped (unsupported type)")
-            continue
-
-        text = (result.get("text") or "").strip()
-        if not text:
-            logger.info("  -> Skipped (empty content)")
-            continue
-
-        # Truncate individual file content if needed
-        file_chars = len(text)
-        if max_chars is not None and total_chars + file_chars > max_chars:
-            allowed = max_chars - total_chars
-            if allowed <= 0:
-                break
-            text = text[:allowed]
-            hit_limit = True
-
-        escaped_text = escape(text)
-        escaped_path = escape(rel_path)
-        article = (
-            f"  <article>\n"
-            f"    <h2>来源：{escaped_path}</h2>\n"
-            f"    <p>{escaped_text}</p>\n"
-            f"  </article>"
-        )
-        articles.append(article)
-        total_chars += len(text)
-
-        if hit_limit:
-            articles.append(
-                f"  <!-- 已达到 --max-chars 限制（{max_chars} 字符），后续文件已截断 -->"
-            )
-            break
-
-    # Build articles section and count actual file articles
-    articles_html = chr(10).join(articles)
-    file_count = articles_html.count('<article>')
-
-    html = (
-        "<!DOCTYPE html>\n"
-        '<html lang="zh-CN">\n'
-        "<head>\n"
-        '<meta charset="UTF-8">\n'
-        "<title>Knowledge Export</title>\n"
-        "<style>\n"
-        "  body { font-family: sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; }\n"
-        "  article { border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin-bottom: 16px; }\n"
-        "  h2 { font-size: 1.1em; color: #2c3e50; margin-top: 0; word-break: break-all; }\n"
-        "  p { white-space: pre-wrap; word-break: break-word; font-size: 0.95em; line-height: 1.6; }\n"
-        "</style>\n"
-        "</head>\n"
-        "<body>\n"
-        f"  <h1>文件夹知识导出</h1>\n"
-        f"  <p>来源：{escape(os.path.abspath(folder_path))}</p>\n"
-        f"  <p>共 {file_count} 个文件，{total_chars} 字符</p>\n"
-        f"  <hr>\n"
-        f"{articles_html}\n"
-        "</body>\n"
-        "</html>"
+def build_text_content(folder_path, max_chars=None):
+    """Parse all files under folder_path and return text content."""
+    file_list, _ = collect_files_info(folder_path)
+    text, parsed, skipped, errors, chars = build_text_from_files(
+        folder_path, file_list, max_chars=max_chars, include_skipped=True
     )
-    return html
+    return text, parsed, skipped, errors, chars
 
 
 def main():
@@ -210,16 +141,29 @@ def main():
             print("警告：未生成任何文档（文件夹为空或所有文件都无法解析）", file=sys.stderr)
             sys.exit(1)
     else:
-        # -- 传统模式 --
-        html = build_html(args.folder, max_chars=args.max_chars)
+        # -- 传统模式 (TXT generation) --
+        text, parsed, skipped, errors, chars = build_text_content(
+            args.folder, max_chars=args.max_chars
+        )
 
-        with open(args.output, "w", encoding="utf-8") as f:
-            f.write(html)
+        # Ensure .txt extension
+        output_path = args.output
+        if not output_path.lower().endswith('.txt'):
+            output_path += '.txt'
 
-        print("OK - 已生成知识文件: %s" % args.output)
-        print("    共包含 %d 个文件内容" % html.count('<article>'))
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(text)
+
+        file_count_text = text.count('=' * 60) - 1  # Subtract the header separator
+        print("OK - 已生成知识文件: %s" % output_path)
+        print("    共包含 %d 个文件内容, %d 总字符" % (parsed, chars))
+        if skipped:
+            print("    %d 个文件被跳过" % skipped)
+        if errors:
+            print("    %d 个文件解析出错" % errors)
         print()
         print("提示：用 --portal 参数生成分页知识门户，可搜索且 Edge Copilot 友好")
+        print("提示：生成的 .txt 文件可直接上传到 DeepSeek/ChatGPT/Claude")
 
 
 if __name__ == "__main__":

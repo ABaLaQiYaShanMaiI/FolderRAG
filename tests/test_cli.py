@@ -161,7 +161,7 @@ class TestPortalMode:
 
         # Portal is single-page — no docs/ subdirectory
         docs_dir = os.path.join(output_dir, "docs")
-        assert not os.path.isdir(docs_dir), f"docs/ subdirectory should NOT exist (single-page portal)"
+        assert not os.path.isdir(docs_dir), "docs/ subdirectory should NOT exist (single-page portal)"
 
         # All content is in index.html
         index_path = os.path.join(output_dir, "index.html")

@@ -20,6 +20,8 @@ import logging
 from datetime import datetime
 from collections import Counter
 
+from src.constants import FILTER_DIRS as _FILTER_DIRS
+from src.constants import should_filter_file as _should_filter_file
 from src.parser.dispatcher import parse_file
 from src.generator.templates import (
     wrap_index_html,
@@ -173,51 +175,6 @@ def extract_keywords(text: str, max_words: int = 8) -> list:
         if len(keywords) >= max_words:
             break
     return keywords
-
-
-# ============================================================
-#  Filter rules: files to exclude from portal
-# ============================================================
-
-_FILTER_EXTS = frozenset({
-    '.pyc', '.pyo', '.pyd', '.so', '.dll', '.dylib',
-    '.obj', '.o', '.a', '.lib', '.exe', '.msi',
-    '.class', '.jar', '.war',
-    '.min.js', '.min.css', '.min.css.map', '.min.js.map',
-    '.log', '.lock', '.tmp', '.swp', '.swo', '.bak', '.old',
-    '.svg',
-    '.DS_Store', '.directory', '.lst',
-})
-_FILTER_DIRS = frozenset({
-    '.git', '.svn', '.hg', '__pycache__', '.mypy_cache',
-    '.pytest_cache', '.venv', 'venv', 'env', 'node_modules',
-    'bower_components', '.idea', '.vscode', '.vs',
-    '.sass-cache', '.tox', '.eggs', 'eggs',
-    '.ruff_cache', '.mypy_cache',
-})
-_FILTER_FILES = frozenset({
-    '.gitignore', '.gitattributes', '.gitmodules',
-    '.gitkeep', '.gitlab-ci.yml', '.travis.yml',
-    'LICENSE', 'COPYING', 'AUTHORS',
-    'thumbs.db', 'desktop.ini',
-})
-
-
-def _should_filter_file(rel_path: str) -> bool:
-    """Return True if a file should be excluded from the portal."""
-    parts = rel_path.replace('\\', '/').split('/')
-    for part in parts[:-1]:
-        if part in _FILTER_DIRS or part.startswith('.'):
-            return True
-    fname = parts[-1]
-    if fname.startswith('.'):
-        return True
-    if fname in _FILTER_FILES:
-        return True
-    for ext in _FILTER_EXTS:
-        if fname.endswith(ext):
-            return True
-    return False
 
 
 def _is_readme_file(rel_path: str) -> bool:

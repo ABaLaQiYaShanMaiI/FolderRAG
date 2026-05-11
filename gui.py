@@ -20,7 +20,7 @@ try:
 except ImportError:
     HAS_PORTAL = False
 
-from src.gui_scanner import collect_files_info, build_html_from_files, human_readable_size, _
+from src.gui_scanner import collect_files_info, build_html_from_files, build_text_from_files, human_readable_size, _
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'empty': 'Empty folder or no readable files',
             'file_list': 'Files',
             'mode_label': 'Mode:',
-            'single': 'Single HTML',
+            'single': 'Single TXT',
             'portal_mode': 'Portal',
             'ready': 'Ready',
             'unavail': 'Unavailable',
@@ -62,14 +62,14 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'fname': 'Name:',
             'show_skip': 'Show unsupported',
             'out_dir': 'Output dir:',
-            'gen_btn': 'Generate HTML',
+            'gen_btn': 'Generate TXT',
             'gen_portal_btn': 'Generate Portal',
             'start_hint': 'Select a folder to start',
             'status_ready': 'Ready',
             'files': 'files',
             'supported': 'supported',
             'parseable': 'parseable',
-            'gen_done': 'Generated!',
+            'gen_done': 'TXT generated!',
             'portal_done': 'Portal generated!',
             'open_folder': 'Open output folder?',
             'server_start': 'Start Server',
@@ -94,7 +94,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'empty': '文件夹为空或没有可读文件',
             'file_list': '文件列表',
             'mode_label': '模式：',
-            'single': '单文件',
+            'single': '单文件 TXT',
             'portal_mode': '门户',
             'ready': '就绪',
             'unavail': '不可用',
@@ -104,14 +104,14 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'fname': '文件名：',
             'show_skip': '显示不支持标记',
             'out_dir': '输出目录：',
-            'gen_btn': '生成 HTML',
+            'gen_btn': '生成 TXT',
             'gen_portal_btn': '生成门户',
             'start_hint': '请选择文件夹开始',
             'status_ready': '就绪',
             'files': '个文件',
             'supported': '个支持',
             'parseable': '个可解析',
-            'gen_done': '生成成功！',
+            'gen_done': 'TXT 生成成功！',
             'portal_done': '门户生成成功！',
             'open_folder': '打开输出文件夹？',
             'server_start': '启动服务器',
@@ -131,7 +131,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.file_list = []
         self.total_size = 0
         self.generating = False
-        self.output_path = os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_export.html")
+        self.output_path = os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_export.txt")
 
         # --- HTTP server state ---
         self._server_thread = None
@@ -487,7 +487,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         ttk.Entry(r1, textvariable=self.out_var, font=('Segoe UI', 9)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 4))
         out_btn = tk.Button(r1, text=self.tr('browse'), font=('Segoe UI', 9),
                             bg=self.COLORS['primary'], fg='white', relief='flat',
-                            cursor='hand2', command=self.browse_output, padx=10)
+                            cursor='hand2', command=self.browse_txt_output, padx=10)
         out_btn.pack(side=tk.LEFT)
         out_btn.bind('<Enter>', lambda e: out_btn.configure(bg=self.COLORS['primary_hover']))
         out_btn.bind('<Leave>', lambda e: out_btn.configure(bg=self.COLORS['primary']))
@@ -507,7 +507,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                  bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
         self.fname_var = tk.StringVar(value='knowledge_export')
         ttk.Entry(r2, textvariable=self.fname_var, width=16).pack(side=tk.LEFT, padx=(4, 2))
-        tk.Label(r2, text='.html', font=('Segoe UI', 10, 'bold'),
+        tk.Label(r2, text='.txt', font=('Segoe UI', 10, 'bold'),
                  bg=self.COLORS['card'], fg=self.COLORS['primary']).pack(side=tk.LEFT)
         self.fname_var.trace_add('write', lambda *a: self.update_out_path())
 
@@ -546,6 +546,22 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         tk.Checkbutton(self.portal_f, text=self.tr('show_skip'),
                        variable=self.skip_var, font=('Segoe UI', 10),
                        bg=self.COLORS['card'], selectcolor=self.COLORS['card']).pack(anchor=tk.W, pady=(2, 0))
+
+    def browse_output(self):
+        fp = filedialog.asksaveasfilename(title="Save TXT", defaultextension=".txt",
+                                           filetypes=[("Text files","*.txt"),("All files","*.*")],
+                                           initialfile=self.fname_var.get()+".txt")
+        if fp:
+            self.out_var.set(fp)
+            self.fname_var.set(os.path.splitext(os.path.basename(fp))[0])
+
+    def browse_txt_output(self):
+        fp = filedialog.asksaveasfilename(title="Save TXT", defaultextension=".txt",
+                                           filetypes=[("Text files","*.txt"),("All files","*.*")],
+                                           initialfile=self.fname_var.get()+".txt")
+        if fp:
+            self.out_var.set(fp)
+            self.fname_var.set(os.path.splitext(os.path.basename(fp))[0])
 
     def _save_port(self):
         """Save port from entry widget."""
@@ -777,15 +793,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         else:
             self.single_f.pack(fill=tk.X)
             self.gen_btn.config(text=self.tr('gen_btn'))
-            self.status_var.set("Single HTML: all in one file" if self._lang == 'en' else "单文件模式：所有文档合并为一个文件")
-
-    def browse_output(self):
-        fp = filedialog.asksaveasfilename(title="Save HTML", defaultextension=".html",
-                                           filetypes=[("HTML files","*.html"),("All files","*.*")],
-                                           initialfile=self.fname_var.get()+".html")
-        if fp:
-            self.out_var.set(fp)
-            self.fname_var.set(os.path.splitext(os.path.basename(fp))[0])
+            self.status_var.set("Single TXT: all in one file" if self._lang == 'en' else "单文件 TXT 模式：所有文档合并为一个文件")
 
     def browse_portal_out(self):
         f = filedialog.askdirectory(title="Output directory")
@@ -797,7 +805,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         if name:
             cur = self.out_var.get()
             d = os.path.dirname(cur) if os.path.dirname(cur) else os.path.join(os.path.expanduser("~"), "Desktop")
-            self.out_var.set(os.path.join(d, f"{name}.html"))
+            self.out_var.set(os.path.join(d, f"{name}.txt"))
 
     def generate(self):
         if self.generating or not self.current_folder or not self.file_list:
@@ -836,13 +844,14 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self._sim_progress()
             return
 
-        # ---- Single HTML mode ----
+        # ---- Single TXT mode ----
         out = self.out_var.get().strip()
         if not out:
             messagebox.showerror("Error", "Set output path")
             return
-        if not out.lower().endswith('.html'):
-            out += '.html'
+        # Ensure .txt extension
+        if not out.lower().endswith('.txt'):
+            out += '.txt'
             self.out_var.set(out)
         mc = self.max_ch_var.get().strip()
         max_chars = None
@@ -854,15 +863,15 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             except:
                 messagebox.showerror("Error", "Invalid integer")
                 return
-        self._start_gen("Generating..." if self._lang == 'en' else "正在生成...")
+        self._start_gen("Generating TXT..." if self._lang == 'en' else "正在生成 TXT...")
 
         def task():
             try:
-                html, parsed, skipped, errors, chars = build_html_from_files(
-                    self.current_folder, self.file_list, out,
-                    max_chars=max_chars, include_skipped=skip, language=self._lang)
+                text, parsed, skipped, errors, chars = build_text_from_files(
+                    self.current_folder, self.file_list,
+                    max_chars=max_chars, include_skipped=skip)
                 with open(out, 'w', encoding='utf-8') as f:
-                    f.write(html)
+                    f.write(text)
                 self.root.after(0, lambda: self.prog.config(value=100))
                 self.root.after(0, lambda: self._gen_done(out, parsed, skipped, errors, chars))
             except Exception as e2:
@@ -898,7 +907,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.footer_var.set(f"OK {os.path.basename(out_path)}")
         self.dot.delete('all')
         self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
-        if messagebox.askyesno("Success", f"HTML generated!\n\nOutput: {out_path}\nParsed: {parsed}\nSkipped: {skipped}\nErrors: {errors}\nChars: {chars:,}\nSize: {human_readable_size(fs)}\n\n{self.tr('open_folder')}"):
+        if messagebox.askyesno("Success", f"TXT generated!\n\nOutput: {out_path}\nParsed: {parsed}\nSkipped: {skipped}\nErrors: {errors}\nChars: {chars:,}\nSize: {human_readable_size(fs)}\n\n{self.tr('open_folder')}"):
             self._open_folder(out_path)
 
     def _portal_done(self, result):
