@@ -8,6 +8,7 @@ import os
 import json
 import re
 from html import escape
+from typing import Optional
 
 _TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 _TEMPLATE_CACHE: dict[str, str] = {}
@@ -97,7 +98,7 @@ def _build_toc_html(text: str) -> str:
     return "\n".join(parts)
 
 
-def _build_doc_sitemap_html(all_docs_meta: list, current_title: str = "", index_link: str = "../index.html", max_items: int | None = None) -> str:
+def _build_doc_sitemap_html(all_docs_meta: list, current_title: str = "", index_link: str = "../index.html", max_items: Optional[int] = None) -> str:
     """Build a compact AI-readable sitemap for doc pages showing all documents.
     
     If max_items is set, only show up to that many items and indicate truncation.
