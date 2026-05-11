@@ -616,6 +616,10 @@ def generate_portal(
     file_tree_html = build_file_tree_html(folder_path, docs_dir) if include_skipped else ""
 
     # Generate index.html
+    # NOTE: css_path is intentionally NOT passed for index_page:
+    # index_page.html has tons of JS-dependent inline styles (search, cards,
+    # tag cloud) that would break if moved to external CSS. Only doc pages
+    # get external CSS via css_path. (Bugfix: keep inline styles on index.)
     if docs_meta or file_tree_html:
         index_html = wrap_index_html(
             docs_meta=docs_meta,
@@ -625,7 +629,6 @@ def generate_portal(
             generated_at=now,
             file_tree_html=file_tree_html,
             language=language,
-            css_path="assets/index.css",  # Optimization C: external CSS
         )
         index_path = os.path.join(output_dir, "index.html")
         with open(index_path, 'w', encoding='utf-8') as f:
@@ -785,7 +788,7 @@ nav[aria-label="Pagination"] {
   text-align: center; color: #999; font-size: 0.82em;
   margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0;
 }
-.copilot-hint { display: none; }
+.copilot-hint { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 @media (prefers-color-scheme: dark) {
   body { background: #1a1a2e; color: #e0e0e0; }
   .lang-en { color: #999; }

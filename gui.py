@@ -218,10 +218,15 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             return True
 
         actual_port = port
+        # allow_reuse_address: avoid "Only one usage" errors on Windows restart
+        socketserver.TCPServer.allow_reuse_address = True
         for attempt in range(max_attempts):
             try:
-                os.chdir(directory)
-                handler = http.server.SimpleHTTPRequestHandler
+                # Use directory parameter (Python 3.7+) instead of os.chdir()
+                # SimpleHTTPRequestHandler serves files relative to given directory.
+                handler = lambda *args, **kwargs: http.server.SimpleHTTPRequestHandler(
+                    *args, directory=directory, **kwargs
+                )
                 self._httpd = socketserver.TCPServer(("", actual_port), handler)
                 break
             except OSError as e:
