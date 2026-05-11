@@ -44,3 +44,16 @@ tmp_test_db/
 
 # Logs
 *.log
+
+# Generated output directories
+test_output/
+test_final_output/
+
+# Debug / test script residuals
+debug
+test_full_gui_repro.py
+test_gui_flow.py
+test_skip_result.txt
+
+# Test data generated
+test_data/

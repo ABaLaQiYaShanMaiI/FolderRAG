@@ -22,6 +22,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Module-level cache for MIME checker
+_mime_checker_cache = None
+
 
 def human_readable_size(size_bytes: int) -> str:
     """Convert bytes to human readable string."""
@@ -34,9 +37,13 @@ def human_readable_size(size_bytes: int) -> str:
 
 def _get_mime_checker():
     """
-    Initialize MIME type checker with fallback extensions.
+    Initialize MIME type checker with fallback extensions (cached).
     Returns (checker, prefixes, exact_set, fallback_exts) tuple.
     """
+    global _mime_checker_cache
+    if _mime_checker_cache is not None:
+        return _mime_checker_cache
+
     # Fallback extensions when python-magic is unavailable
     FALLBACK_EXTS = {
         '.txt', '.md', '.html', '.htm', '.json', '.xml', '.csv',
@@ -53,10 +60,14 @@ def _get_mime_checker():
         '.docx', '.pptx', '.xlsx',
         # Training / ML text config files
         '.prototxt', '.pbtxt', '.solver', '.trainval', '.test',
-        '.weights', '.cfg',
+        '.cfg',
+        # .NET project & solution files (XML/text)
+        '.csproj', '.fsproj', '.vbproj',
+        '.sln', '.suo', '.user', '.vsconfig',
+        '.xaml', '.axaml',
     }
     try:
-        import magic  # type: ignore[import-untyped]
+        import magic
         checker = magic.Magic(mime=True)
         prefixes = ('text/',)
         exact = {
@@ -68,9 +79,11 @@ def _get_mime_checker():
             'application/vnd.ms-powerpoint',
             'application/vnd.ms-excel',
         }
-        return checker, prefixes, exact, FALLBACK_EXTS
+        _mime_checker_cache = (checker, prefixes, exact, FALLBACK_EXTS)
+        return _mime_checker_cache
     except Exception:
-        return None, (), set(), FALLBACK_EXTS
+        _mime_checker_cache = (None, (), set(), FALLBACK_EXTS)
+        return _mime_checker_cache
 
 
 def is_file_supported(full_path: str, ext: str) -> bool:
@@ -81,7 +94,8 @@ def is_file_supported(full_path: str, ext: str) -> bool:
     if checker is not None:
         try:
             mime = checker.from_file(full_path)
-            return mime.startswith(prefixes) or mime in exact
+            if mime.startswith(prefixes) or mime in exact:
+                return True
         except Exception:
             pass
     return ext in fallback_exts
@@ -129,6 +143,7 @@ def build_html_from_files(
     output_path: str,
     max_chars: int = None,
     include_skipped: bool = True,
+    language: str = "en",
 ) -> tuple:
     """
     Parse files and generate HTML content.
@@ -140,6 +155,8 @@ def build_html_from_files(
     parsed_count = 0
     skipped_count = 0
     error_count = 0
+    # Track skip reasons for console output
+    skip_by_reason: dict[str, int] = {}
 
     for finfo in file_list:
         if hit_limit:
@@ -152,11 +169,12 @@ def build_html_from_files(
                 article = (
                     f"  <article class=\"skipped\">\n"
                     f"    <h2>⏭️ {escaped_path}</h2>\n"
-                    f"    <p class=\"meta\">{_('类型不支持', 'Unsupported')} | {_('大小', 'Size')}：{escaped_size}</p>\n"
+                    f"    <p class=\"meta\">{_('类型不支持', 'Unsupported')} | {_('大小', 'Size')}: {escaped_size}</p>\n"
                     f"  </article>"
                 )
                 articles.append(article)
             skipped_count += 1
+            skip_by_reason['unsupported format'] = skip_by_reason.get('unsupported format', 0) + 1
             continue
 
         try:
@@ -167,11 +185,13 @@ def build_html_from_files(
                 result = parse_file(finfo['path'])
                 if result is None:
                     skipped_count += 1
+                    skip_by_reason['parser returned no content'] = skip_by_reason.get('parser returned no content', 0) + 1
                     continue
                 text = (result.get("text") or "").strip()
 
             if not text:
                 skipped_count += 1
+                skip_by_reason['empty content after parsing'] = skip_by_reason.get('empty content after parsing', 0) + 1
                 continue
 
             file_chars = len(text)
@@ -188,7 +208,7 @@ def build_html_from_files(
             article = (
                 f"  <article>\n"
                 f"    <h2>📄 {escaped_path}</h2>\n"
-                f"    <p class=\"meta\">{_('大小', 'Size')}：{escaped_size} | {_('内容', 'Content')}：{file_chars} {_('字符', 'chars')}</p>\n"
+                f"    <p class=\"meta\">{_('大小', 'Size')}: {escaped_size} | {_('内容', 'Content')}: {file_chars} {_('字符', 'chars')}</p>\n"
                 f"    <p>{escaped_text}</p>\n"
                 f"  </article>"
             )
@@ -206,14 +226,25 @@ def build_html_from_files(
             )
             break
 
+    # Print skip reasons to console
+    if skip_by_reason:
+        print(f"[Skip Summary] {skipped_count} files skipped:")
+        for reason, count in sorted(skip_by_reason.items(), key=lambda x: -x[1]):
+            print(f"  - {count} file(s): {reason}")
+    if error_count:
+        print(f"[Error Summary] {error_count} file(s) failed to parse")
+
     articles_html = "\n".join(articles)
     file_count = parsed_count
     folder_name = escape(os.path.basename(os.path.abspath(folder_path)))
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    # Use language parameter to determine HTML lang attribute
+    html_lang = "en" if language != "zh" else "zh-CN"
+
     html = (
         "<!DOCTYPE html>\n"
-        '<html lang="zh-CN">\n'
+        f'<html lang="{html_lang}">\n'
         "<head>\n"
         '<meta charset="UTF-8">\n'
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
@@ -242,15 +273,15 @@ def build_html_from_files(
         "  <div class=\"header\">\n"
         f"    <h1>📁 {folder_name}</h1>\n"
         "    <div class=\"meta\">\n"
-        f"      <span>📄 {_('文件数', 'Files')}：{file_count}</span>\n"
-        f"      <span>📝 {_('总字符', 'Total chars')}：{total_chars:,}</span>\n"
-        f"      <span>🕐 {_('导出时间', 'Exported')}：{now}</span>\n"
-        f"      <span>📂 {_('来源', 'Source')}：{escape(os.path.abspath(folder_path))}</span>\n"
+        f"      <span>📄 {_('文件数', 'Files')}: {file_count}</span>\n"
+        f"      <span>📝 {_('总字符', 'Total chars')}: {total_chars:,}</span>\n"
+        f"      <span>🕐 {_('导出时间', 'Exported')}: {now}</span>\n"
+        f"      <span>📂 {_('来源', 'Source')}: {escape(os.path.abspath(folder_path))}</span>\n"
         "    </div>\n"
         "  </div>\n"
         f"{articles_html}\n"
         "  <div class=\"footer\">\n"
-        f"    <p>{_('由 FolderKnowledgeSiteGeneratorForAI Desktop 生成', 'Generated by FolderKnowledgeSiteGeneratorForAI Desktop')} | {_('共', 'Total')} {file_count} {_('个文件', 'files')}，{total_chars:,} {_('字符', 'chars')}"
+        f"    <p>{_('由 FolderKnowledgeSiteGeneratorForAI Desktop 生成', 'Generated by FolderKnowledgeSiteGeneratorForAI Desktop')} | {_('共', 'Total')} {file_count} {_('个文件', 'files')}, {total_chars:,} {_('字符', 'chars')}"
         f" | {now}</p>\n"
         "  </div>\n"
         "</body>\n"
@@ -260,5 +291,5 @@ def build_html_from_files(
 
 
 def _(zh: str, en: str) -> str:
-    """Return English label only."""
+    """Return English label for HTML output (defaults to en)."""
     return en

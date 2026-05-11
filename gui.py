@@ -10,6 +10,7 @@ import threading
 import logging
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from functools import partial
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -215,9 +216,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         socketserver.TCPServer.allow_reuse_address = True
         for attempt in range(max_attempts):
             try:
-                handler = lambda *args, **kwargs: http.server.SimpleHTTPRequestHandler(
-                    *args, directory=directory, **kwargs
-                )
+                handler = partial(http.server.SimpleHTTPRequestHandler, directory=directory)
                 self._httpd = socketserver.TCPServer(("", actual_port), handler)
                 break
             except OSError as e:
@@ -803,6 +802,9 @@ class FolderKnowledgeSiteGeneratorForAIUI:
     def generate(self):
         if self.generating or not self.current_folder or not self.file_list:
             return
+
+        # Save port before generation starts
+        self._save_port()
 
         is_portal = self.mode_var.get() == 'portal'
         skip = self.skip_var.get()

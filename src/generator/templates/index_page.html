@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
-<meta name="description" content="$index_meta_description">
-<meta name="keywords" content="$index_meta_keywords">
+<meta name="description" content="$meta_description_escaped">
+<meta name="keywords" content="$meta_keywords_escaped">
 <title>$escaped_folder — Knowledge Portal</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -449,8 +449,8 @@ function collapseAll() {
 
 // ── Jump to file content from tree ──
 function jumpToFile(filename) {
-  // Escape special characters for CSS selector
-  const escaped = filename.replace(/[!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~]/g, '\\$&');
+  // Escape special characters for CSS selector (use CSS.escape polyfill approach)
+  const escaped = filename.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const block = document.querySelector(`.doc-block[data-filename="${escaped}"]`);
   if (block) {
     // Expand this block if not already
@@ -462,6 +462,9 @@ function jumpToFile(filename) {
       if (btn) btn.textContent = '▼';
     }
     block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    // File was skipped or could not be parsed - show helpful message
+    alert('This file could not be parsed or was skipped.\n\nFile: ' + filename);
   }
 }
 
@@ -484,7 +487,9 @@ function jumpToFile(filename) {
       const filename = (block.getAttribute('data-filename') || '').toLowerCase();
       const headerText = (block.querySelector('.file-name')?.textContent || '').toLowerCase();
       const tags = (block.querySelector('.file-tags')?.textContent || '').toLowerCase();
-      const allText = filename + ' ' + headerText + ' ' + tags;
+      // Also search the visible text content of expanded blocks
+      const bodyText = (block.querySelector('.doc-content')?.textContent || '').toLowerCase();
+      const allText = filename + ' ' + headerText + ' ' + tags + ' ' + bodyText;
       
       const match = !q || allText.includes(q);
       block.classList.toggle('hidden', !match);

@@ -50,6 +50,75 @@ def human_readable_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f} TB"
 
 
+def make_safe_filename(rel_path: str, base_dir: str) -> str:
+    """Sanitize a relative file path into a safe HTML filename."""
+    # Normalize separators
+    rel = rel_path.replace('\\', '/').strip('/')
+    # Remove drive letters (e.g., C:)
+    rel = re.sub(r'^[A-Za-z]:', '', rel)
+    # Replace unsafe filename characters with underscores
+    safe = re.sub(r'[<>:"/\\|?*]', '_', rel)
+    # Collapse multiple underscores
+    safe = re.sub(r'_+', '_', safe)
+    # Remove leading/trailing underscores and dots
+    safe = safe.strip('_. ')
+    if not safe:
+        safe = 'untitled'
+    # Ensure .html extension
+    if not safe.endswith('.html'):
+        safe += '.html'
+    return safe
+
+
+def split_large_text(text: str, max_chars: int = 8000) -> list:
+    """Split large text into multiple parts, preferring splits at headings/paragraphs.
+    
+    Returns list of (chunk_text, heading_or_None) tuples.
+    """
+    if len(text) <= max_chars:
+        return [(text, None)]
+    
+    parts = []
+    # Try to split at markdown headings first
+    lines = text.split('\n')
+    current_chunk = []
+    current_size = 0
+    current_heading = None
+    
+    for line in lines:
+        line_len = len(line) + 1  # +1 for newline
+        
+        # Check if this is a heading
+        heading_match = re.match(r'^(#{1,6}\s+.*)$', line)
+        
+        if current_size + line_len > max_chars and current_chunk:
+            # Flush current chunk
+            parts.append(('\n'.join(current_chunk), current_heading))
+            current_chunk = []
+            current_size = 0
+            current_heading = None
+        
+        # If this is a heading, set it as the heading for the next chunk
+        if heading_match:
+            current_heading = heading_match.group(1)
+        
+        current_chunk.append(line)
+        current_size += line_len
+    
+    # Flush remaining
+    if current_chunk:
+        parts.append(('\n'.join(current_chunk), current_heading))
+    
+    # Edge case: if a single line exceeds max_chars, force split
+    if not parts:
+        # Force split at max_chars
+        for i in range(0, len(text), max_chars):
+            chunk = text[i:i + max_chars]
+            parts.append((chunk, None))
+    
+    return parts
+
+
 def extract_keywords(text: str, max_words: int = 8) -> list:
     """Extract keywords from text using frequency + stop word filtering."""
     chinese_chars = re.findall(r'[\u4e00-\u9fff]{2,6}', text)
@@ -154,7 +223,10 @@ def _should_filter_file(rel_path: str) -> bool:
 def _is_readme_file(rel_path: str) -> bool:
     """Return True if the file is a README."""
     fname = os.path.basename(rel_path).lower()
-    return fname in ('readme.md', 'readme.txt', 'readme', 'readme.rst', 'readme.markdown')
+    return fname in (
+        'readme.md', 'readme.txt', 'readme', 'readme.rst', 'readme.markdown',
+        'readme.org', 'readme.adoc', 'readme.asciidoc',
+    )
 
 
 # ============================================================
@@ -278,6 +350,7 @@ def generate_portal(
     parsed_count = 0
     skipped_count = 0
     error_count = 0
+    skip_by_reason: dict[str, int] = {}
 
     if show_progress:
         print("  [Scan] Found %d files, parsing..." % total_files)
@@ -312,17 +385,27 @@ def generate_portal(
 
         if result is None:
             skipped_count += 1
+            skip_by_reason['parser returned no content'] = skip_by_reason.get('parser returned no content', 0) + 1
             continue
 
         text = (result.get("text") or "").strip()
         if not text:
             skipped_count += 1
+            skip_by_reason['empty content after parsing'] = skip_by_reason.get('empty content after parsing', 0) + 1
             continue
 
         char_count = len(text)
         # Truncate extremely large files to prevent page bloat
+        # Use line-based truncation to preserve code structure
         if MAX_CHARS_PER_FILE and char_count > MAX_CHARS_PER_FILE:
-            text = text[:MAX_CHARS_PER_FILE] + (
+            # Find the last line boundary before MAX_CHARS_PER_FILE
+            truncated = text[:MAX_CHARS_PER_FILE]
+            last_newline = truncated.rfind('\n')
+            if last_newline > MAX_CHARS_PER_FILE * 0.5:  # Only use line boundary if reasonable
+                text = truncated[:last_newline]
+            else:
+                text = truncated
+            text += (
                 f"\n\n... [截断：原文 {char_count:,} 字符，仅展示前 {MAX_CHARS_PER_FILE:,} 字符] ...\n"
                 f"... [Truncated: original {char_count:,} chars, showing first {MAX_CHARS_PER_FILE:,} chars] ..."
             )
@@ -358,6 +441,14 @@ def generate_portal(
 
     docs_meta.sort(key=lambda d: d.get("title", "").lower())
     docs_texts.sort(key=lambda d: d.get("title", "").lower())
+
+    # Print skip reasons to console
+    if skip_by_reason:
+        print(f"  [Skip Summary] {skipped_count} files skipped:")
+        for reason, count in sorted(skip_by_reason.items(), key=lambda x: -x[1]):
+            print(f"    - {count} file(s): {reason}")
+    if error_count:
+        print(f"  [Error Summary] {error_count} file(s) failed to parse")
 
     file_tree_html = build_file_tree_html(folder_path) if include_skipped else ""
     file_contents_html = build_file_content_blocks(docs_texts)

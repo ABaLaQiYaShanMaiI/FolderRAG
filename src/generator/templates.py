@@ -21,102 +21,38 @@ def _load_template(name: str) -> str:
     return _TEMPLATE_CACHE[name]
 
 
-def _get_file_type(filename: str) -> str:
-    """Determine file type from extension."""
-    ext = os.path.splitext(filename)[1].lower()
-    type_map = {
-        # Office / PDF
-        '.pdf': 'PDF', '.docx': 'DOCX', '.doc': 'DOC',
-        '.pptx': 'PowerPoint', '.ppt': 'PowerPoint',
-        '.xlsx': 'Excel', '.xls': 'Excel',
-        '.rtf': 'RTF',
-        # Text / Markup
-        '.txt': 'TXT', '.md': 'Markdown', '.rst': 'reStructuredText',
-        '.html': 'HTML', '.htm': 'HTML', '.xhtml': 'XHTML',
-        '.css': 'CSS', '.scss': 'SCSS', '.less': 'Less', '.sass': 'Sass',
-        '.json': 'JSON', '.xml': 'XML', '.yaml': 'YAML', '.yml': 'YAML',
-        '.toml': 'TOML', '.ini': 'Config', '.cfg': 'Config', '.conf': 'Config',
-        '.csv': 'CSV', '.tsv': 'TSV',
-        # Scripting / Programming
-        '.py': 'Python', '.pyw': 'Python',
-        '.js': 'JavaScript', '.jsx': 'JSX',
-        '.ts': 'TypeScript', '.tsx': 'TSX',
-        '.sh': 'Shell Script', '.bash': 'Bash', '.zsh': 'Zsh', '.fish': 'Fish',
-        '.bat': 'Batch', '.cmd': 'Batch', '.ps1': 'PowerShell', '.psm1': 'PowerShell Module', '.psd1': 'PowerShell Data',
-        '.vbs': 'VBScript',
-        # C-family
-        '.cs': 'C#', '.fs': 'F#', '.vb': 'VB.NET',
-        '.cpp': 'C++', '.c': 'C', '.h': 'C Header',
-        '.hpp': 'C++ Header', '.cc': 'C++', '.cxx': 'C++', '.hh': 'C++ Header', '.hxx': 'C++ Header',
-        # Java & JVM
-        '.java': 'Java', '.kt': 'Kotlin', '.kts': 'Kotlin Script',
-        '.scala': 'Scala', '.groovy': 'Groovy',
-        '.clj': 'Clojure', '.cljs': 'ClojureScript',
-        # Functional
-        '.hs': 'Haskell', '.lhs': 'Literate Haskell',
-        '.erl': 'Erlang', '.hrl': 'Erlang Header',
-        '.ex': 'Elixir', '.exs': 'Elixir Script', '.elm': 'Elm',
-        # Mobile
-        '.swift': 'Swift', '.dart': 'Dart',
-        # Web / Server
-        '.php': 'PHP', '.phtml': 'PHP',
-        '.rb': 'Ruby', '.pl': 'Perl', '.pm': 'Perl Module',
-        '.tcl': 'Tcl',
-        '.sql': 'SQL', '.ddl': 'SQL DDL', '.dml': 'SQL DML',
-        '.lua': 'Lua',
-        # Systems
-        '.go': 'Go', '.rs': 'Rust',
-        '.r': 'R', '.R': 'R', '.m': 'MATLAB', '.mm': 'Objective-C++',
-        # Data / ML text config
-        '.prototxt': 'Caffe Proto', '.pbtxt': 'Protobuf Text',
-        '.solver': 'Caffe Solver', '.trainval': 'Training Config',
-        '.test': 'Test Config', '.weights': 'Weights Config',
-        # Config
-        '.log': 'Log', '.lock': 'Lock File',
-        '.markdown': 'Markdown', '.text': 'Text',
+# Import shared type mappings from constants module
+try:
+    from src.constants import FILE_TYPE_MAP, FILE_TYPE_ICONS
+except ImportError:
+    # Fallback mappings if constants module unavailable
+    FILE_TYPE_MAP = {
+        '.txt': 'TXT', '.md': 'Markdown', '.py': 'Python', '.js': 'JavaScript',
+        '.ts': 'TypeScript', '.html': 'HTML', '.css': 'CSS', '.json': 'JSON',
+        '.xml': 'XML', '.yaml': 'YAML', '.yml': 'YAML', '.csv': 'CSV',
+        '.ini': 'Config', '.cfg': 'Config', '.conf': 'Config',
+        '.cs': 'C#', '.java': 'Java', '.cpp': 'C++', '.h': 'C Header',
+        '.go': 'Go', '.rs': 'Rust', '.swift': 'Swift', '.kt': 'Kotlin',
+        '.rb': 'Ruby', '.php': 'PHP', '.sh': 'Shell Script', '.bat': 'Batch',
+        '.ps1': 'PowerShell', '.sql': 'SQL', '.r': 'R',
     }
-    return type_map.get(ext, ext.upper().lstrip('.').replace('.', '') if ext else 'Unknown')
+    FILE_TYPE_ICONS = {
+        'Python': '🐍', 'JavaScript': '🟨', 'TypeScript': '🔵',
+        'HTML': '🌐', 'CSS': '🎨', 'Markdown': '📝', 'TXT': '📄',
+        'C#': '🔷', 'Java': '☕', 'Go': '🔷', 'Rust': '🦀',
+        'Swift': '🍎', 'Kotlin': '🅺',
+    }
+
+
+def _get_file_type(filename: str) -> str:
+    """Determine file type from extension using shared constants."""
+    ext = os.path.splitext(filename)[1].lower()
+    return FILE_TYPE_MAP.get(ext, ext.upper().lstrip('.').replace('.', '') if ext else 'Unknown')
 
 
 def _get_file_type_icon(file_type: str) -> str:
-    """Return an emoji icon for the given file type."""
-    icon_map = {
-        'PDF': '📕', 'DOCX': '📘', 'DOC': '📘',
-        'TXT': '📄', 'Markdown': '📝', 'reStructuredText': '📝',
-        'Python': '🐍', 'JavaScript': '🟨', 'TypeScript': '🔵',
-        'JSX': '⚛️', 'TSX': '⚛️',
-        'HTML': '🌐', 'XHTML': '🌐', 'CSS': '🎨',
-        'SCSS': '🎨', 'Less': '🎨', 'Sass': '🎨',
-        'JSON': '📋', 'XML': '📰', 'YAML': '⚙️',
-        'CSV': '📊', 'TSV': '📊', 'Excel': '📊',
-        'PowerPoint': '📽️',
-        'Log': '📃', 'Config': '⚙️',
-        'Shell Script': '💻', 'Bash': '💻', 'Zsh': '💻', 'Fish': '💻',
-        'Batch': '💻', 'PowerShell': '💻', 'PowerShell Module': '💻',
-        'PowerShell Data': '💻', 'VBScript': '💻',
-        'SQL': '🗃️', 'SQL DDL': '🗃️', 'SQL DML': '🗃️',
-        'Ruby': '💎', 'Java': '☕',
-        'C#': '🔷', 'F#': '🔷', 'VB.NET': '🔷',
-        'C++': '⚡', 'C': '⚡', 'C Header': '⚡',
-        'C++ Header': '⚡',
-        'Go': '🔷', 'Rust': '🦀', 'PHP': '🐘',
-        'Swift': '🍎', 'Kotlin': '🅺', 'Kotlin Script': '🅺',
-        'Scala': '🔺', 'Groovy': '🔺',
-        'Clojure': '🍃', 'ClojureScript': '🍃',
-        'Haskell': 'λ', 'Literate Haskell': 'λ',
-        'Erlang': '🟠', 'Erlang Header': '🟠',
-        'Elixir': '💧', 'Elixir Script': '💧', 'Elm': '🌳',
-        'Dart': '🎯', 'Flutter': '🦋',
-        'Perl': '🐪', 'Perl Module': '🐪',
-        'Tcl': '🔧', 'Lua': '🌙',
-        'R': '📊', 'MATLAB': '📐', 'Objective-C++': '🍎',
-        'TOML': '⚙️', 'Lock File': '🔒',
-        'Caffe Proto': '🧠', 'Protobuf Text': '🧠',
-        'Caffe Solver': '🧠', 'Training Config': '🧠',
-        'Test Config': '🧠', 'Weights Config': '🧠',
-        'Text': '📄',
-    }
-    return icon_map.get(file_type, '📄')
+    """Return an emoji icon for the given file type using shared constants."""
+    return FILE_TYPE_ICONS.get(file_type, '📄')
 
 
 def build_file_content_blocks(docs_texts: list) -> str:
@@ -247,8 +183,8 @@ def wrap_index_html(
     result = result.replace("$cards_html", "")  # Cards removed, all info in file blocks
     result = result.replace("$file_tree_html", file_tree_html)
     result = result.replace("$file_contents_html", file_contents_html)
-    result = result.replace("$index_meta_description", escaped_index_meta_desc)
-    result = result.replace("$index_meta_keywords", escaped_index_keywords)
+    result = result.replace("$meta_description_escaped", escaped_index_meta_desc)
+    result = result.replace("$meta_keywords_escaped", escaped_index_keywords)
 
     return result
 
@@ -260,3 +196,35 @@ def _format_total_size(docs_meta: list) -> str:
             return f"{total:.1f} {unit}"
         total /= 1024
     return f"{total:.1f} TB"
+
+
+def wrap_skipped_html(
+    title: str,
+    folder_name: str,
+    file_size_hr: str = "",
+    filepath: str = "",
+) -> str:
+    """Wrap skipped file page with HTML template.
+    
+    NOTE: This function is kept as a public API for compatibility, but
+    the portal generator no longer generates individual skipped pages.
+    Skipped files now appear only in the file tree on the index page.
+    
+    Args:
+        title: File name / title
+        folder_name: Parent folder name
+        file_size_hr: Human-readable file size (optional)
+        filepath: Full file path (optional)
+    
+    Returns:
+        Complete HTML string for a skipped file info page
+    """
+    template = _load_template("skipped_page.html")
+    result = template.replace("$escaped_title", escape(title))
+    result = result.replace("$escaped_folder", escape(folder_name))
+    result = result.replace("$file_size_hr", escape(file_size_hr) if file_size_hr else "Unknown")
+    result = result.replace("$escaped_filepath", escape(filepath) if filepath else "N/A")
+    result = result.replace("$breadcrumb_name", escape(title))
+    result = result.replace("$index_link", "index.html")
+    result = result.replace("$meta_lines", "")
+    return result

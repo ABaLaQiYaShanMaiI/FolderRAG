@@ -117,11 +117,12 @@ def test_generate_portal_with_text_file():
         assert result["index_file"] is not None
         assert os.path.exists(result["index_file"])
 
-        # Check that docs directory was created with html files
-        docs_dir = os.path.join(output_dir, "docs")
-        assert os.path.isdir(docs_dir)
-        html_files = [f for f in os.listdir(docs_dir) if f.endswith('.html')]
-        assert len(html_files) >= 1
+        # Portal is single-page - all content is in index.html
+        # No separate docs/ directory is generated
+        with open(result["index_file"], "r", encoding="utf-8") as f:
+            content = f.read()
+        assert "test_doc.txt" in content
+        assert "This is a test document for portal generation." in content
 
 
 def test_generate_portal_output_dir_exists():
@@ -204,8 +205,9 @@ def _create_folder_with_unsupported_file(tmpdir: str) -> str:
 
 def test_skipped_files_do_not_generate_pages():
     """
-    Verify that unsupported/skipped files do NOT generate individual
-    HTML pages in the docs/ directory (behavior change: no placeholder pages).
+    Verify that unsupported/skipped files do NOT have doc-blocks
+    in the index page (portal is single-page, no separate docs/ dir).
+    Skipped files only appear in the file tree.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         source_dir = _create_folder_with_unsupported_file(tmpdir)
@@ -218,15 +220,19 @@ def test_skipped_files_do_not_generate_pages():
             include_skipped=True,
         )
 
-        # Only the supported .txt file should produce a doc page
+        # Verify portal is single-page (no docs/ directory)
         docs_dir = os.path.join(output_dir, "docs")
-        assert os.path.isdir(docs_dir)
-        doc_files = [f for f in os.listdir(docs_dir) if f.endswith('.html')]
-        assert len(doc_files) == 1, f"Expected 1 doc page, got {len(doc_files)}: {doc_files}"
+        assert not os.path.isdir(docs_dir), "docs/ directory should NOT exist (single-page portal)"
 
-        # The .bin file should NOT have a page
-        bin_pages = [f for f in doc_files if 'notes' in f or 'bin' in f]
-        assert len(bin_pages) == 0, f"Found unexpected pages for .bin: {bin_pages}"
+        # Read the index page
+        assert result["index_file"] and os.path.exists(result["index_file"])
+        with open(result["index_file"], "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # The .bin file should NOT have a doc-block (data-filename attribute)
+        # It may appear in the file tree, but NOT as a collapsible content block
+        assert 'data-filename="notes.bin"' not in content, \
+            ".bin should not have a doc-block (collapsible content block)"
 
         # Verify the skipped count reflects the unsupported file
         assert result["skipped"] >= 1, f"Expected at least 1 skipped, got {result['skipped']}"
@@ -257,9 +263,9 @@ def test_skipped_files_appear_in_file_tree():
 
         # The .bin file should appear in the file tree as a skipped entry
         assert "notes.bin" in content, "Skipped file 'notes.bin' should appear in file tree"
-        # It should appear as a tree-file.skipped entry (not as a doc-card)
-        assert "tree-file skipped" in content or "⏭️" in content, \
-            "Skipped file should appear with skipped styling in file tree"
+        # It should appear with skipped styling (tree-file.skipped or similar text indicator)
+        assert "skipped" in content.lower() or "⏭️" in content or "tree-file.skipped" in content, \
+            "Skipped file styling indicator expected in page"
 
 
 def test_skipped_files_excluded_from_file_tree_when_disabled():

@@ -12,59 +12,25 @@ logger = logging.getLogger(__name__)
 # Common code/text file extensions that should be parsed as text even if
 # python-magic doesn't identify them as text/ MIME type.
 # This ensures .cs, .swift, .kt, and other code files are always handled.
-_FALLBACK_TEXT_EXTS = frozenset({
-    # C-family
-    '.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', '.hh', '.hxx',
-    '.cs', '.fs', '.vb',
-    # Java & JVM
-    '.java', '.kt', '.scala', '.groovy', '.clj', '.cljs',
-    # Python
-    '.py', '.pyw', '.pyx', '.pxd', '.pxi',
-    # Web
-    '.js', '.jsx', '.ts', '.tsx', '.html', '.htm', '.xhtml',
-    '.css', '.scss', '.less', '.sass',
-    # Scripting
-    '.sh', '.bash', '.zsh', '.fish', '.ps1', '.psm1', '.psd1',
-    '.bat', '.cmd', '.vbs', '.pl', '.pm', '.tcl', '.lua',
-    '.rb', '.php', '.phtml', '.php3', '.php4', '.php5',
-    '.r', '.R', '.m', '.mm',
-    # Functional
-    '.hs', '.lhs', '.erl', '.hrl', '.ex', '.exs', '.elm',
-    # Mobile
-    '.swift', '.dart',
-    # Go / Rust
-    '.go', '.rs',
-    # SQL
-    '.sql', '.ddl', '.dml',
-    # Config / text
-    '.md', '.markdown', '.rst', '.txt', '.text',
-    '.json', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
-    '.csv', '.tsv', '.log',
-    # Training / ML text files
-    '.cfg', '.weights', '.prototxt', '.pbtxt',
-    '.solver', '.trainval', '.test',
-})
-
-# Known binary file extensions that should NOT be parsed as text
-_KNOWN_BINARY_EXTS = frozenset({
-    '.pt', '.pth', '.pkl', '.joblib',  # PyTorch / pickle
-    '.onnx',                           # ONNX model
-    '.h5', '.hdf5', '.hdf',           # HDF5
-    '.pb', '.pbtxt',                   # TensorFlow (pbtxt is text but handled above)
-    '.meta', '.index', '.data-00000-of-00001',  # TF checkpoint
-    '.npy', '.npz',                     # NumPy
-    '.bin', '.dat', '.raw',             # Binary data
-    '.weights',                         # Darknet (binary)
-    '.caffemodel',                      # Caffe model
-    '.zip', '.gz', '.bz2', '.xz',       # Archives
-    '.tar', '.7z', '.rar',
-    '.so', '.dll', '.dylib',            # Libraries
-    '.exe', '.msi', '.dmg',            # Executables
-    '.o', '.obj', '.a', '.lib',        # Object files
-    '.pyc', '.pyo', '.class',           # Compiled
-    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp',  # Images
-    '.mp3', '.mp4', '.avi', '.mov', '.wav', '.flac',   # Media
-})
+# NOTE: Now sourced from src.constants.SUPPORTED_TEXT_EXTS for consistency.
+try:
+    from src.constants import SUPPORTED_TEXT_EXTS, KNOWN_BINARY_EXTS as CONST_BINARY_EXTS
+    _FALLBACK_TEXT_EXTS = SUPPORTED_TEXT_EXTS
+    _KNOWN_BINARY_EXTS = CONST_BINARY_EXTS
+except ImportError:
+    # Fallback if running as standalone
+    _FALLBACK_TEXT_EXTS = frozenset({'.txt', '.md', '.py', '.js', '.ts', '.html', '.css', '.json', '.xml', '.csv', '.yaml', '.yml', '.log', '.ini', '.cfg', '.conf', '.cs', '.java', '.cpp', '.h'})
+    _KNOWN_BINARY_EXTS = frozenset({
+        '.pt', '.pth', '.pkl', '.joblib', '.onnx', '.h5', '.hdf5', '.hdf',
+        '.pb', '.meta', '.index', '.data-00000-of-00001',
+        '.npy', '.npz', '.bin', '.dat', '.raw',
+        '.caffemodel', '.weights',
+        '.zip', '.gz', '.bz2', '.xz', '.tar', '.7z', '.rar',
+        '.so', '.dll', '.dylib', '.exe', '.msi', '.dmg',
+        '.o', '.obj', '.a', '.lib', '.pyc', '.pyo', '.class',
+        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp',
+        '.mp3', '.mp4', '.avi', '.mov', '.wav', '.flac',
+    })
 
 
 def _should_try_text_fallback(filepath: str) -> bool:
@@ -106,7 +72,14 @@ def parse_file(filepath):
         logger.debug("Skipping known binary file: %s", filepath)
         return None
     
-    mime = _magic.from_file(filepath)
+    # ATTENTION: magic.from_file can raise MagicException for .cs files due to
+    # a regex bug in the libmagic database on Windows. We must catch ALL exceptions.
+    try:
+        mime = _magic.from_file(filepath)
+    except Exception:
+        mime = None
+        logger.debug("magic.from_file() failed for %s, falling back to extension", filepath)
+
     if mime:
         if mime.startswith("text/"):
             return parse_text(filepath, mime)
@@ -143,9 +116,10 @@ def parse_file(filepath):
                 )
             return parse_office(filepath, "xlsx")
     
-    # Extension-based fallback: try to parse as text for known code/text extensions
-    # This handles .cs, .swift, .kt, and other code files where magic might
-    # return unexpected MIME types (e.g., application/octet-stream)
+    # Extension-based fallback: try to parse as text for known code/text extensions.
+    # This handles .cs, .swift, .kt, csproj, sln, xaml, and other code files
+    # where magic might return unexpected MIME types (e.g., application/octet-stream)
+    # or simply crash (MagicException for .cs on some Windows setups).
     if _should_try_text_fallback(filepath):
         logger.debug("Trying text fallback for %s (mime=%s, ext=%s)", filepath, mime, ext)
         try:
