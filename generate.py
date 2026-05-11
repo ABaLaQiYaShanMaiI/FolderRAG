@@ -7,14 +7,13 @@ Usage:
     python generate.py <folder_path> -o <output.html>
     python generate.py <folder_path> -o <output.html> --max-chars 50000
 
-    # 门户模式：生成可搜索的分页知识门户（推荐 Edge Copilot 使用）
+    # 门户模式：生成可搜索的单页知识门户
     python generate.py <folder_path> --portal -o <output_dir/>
-    python generate.py <folder_path> --portal -o <output_dir/> --max-chars-per-page 8000
 
 Scans all files in a folder, parses documents (PDF, DOCX, PPTX, XLSX, TXT, etc.),
 and generates:
   - 传统模式：一个结构化 HTML 文件，适合直接喂给 LLM
-  - 门户模式：一组有索引 + 搜索的知识门户 HTML 页面，适合 Edge Copilot 完整消费
+  - 门户模式：一个可搜索、可折叠的单页知识门户，适合 AI 完整消费
 """
 
 import os
@@ -161,13 +160,7 @@ def main():
     parser.add_argument(
         "--portal",
         action="store_true",
-        help="[门户模式] 生成可搜索的分页知识门户（推荐 Edge Copilot 使用）",
-    )
-    parser.add_argument(
-        "--max-chars-per-page",
-        type=int,
-        default=8000,
-        help="[门户模式] 每页最大字符数（默认 8000，确保 Copilot 完整读取）",
+        help="[门户模式] 生成可搜索的单页知识门户（推荐 AI 使用）",
     )
     parser.add_argument(
         "--no-skipped",
@@ -188,13 +181,11 @@ def main():
 
         output_dir = args.output
         print("[FolderKnowledgeSiteGeneratorForAI] 正在生成知识门户到: %s" % output_dir)
-        print("[FolderKnowledgeSiteGeneratorForAI] 每页最大字符: %d" % args.max_chars_per_page)
         print()
 
         result = generate_portal(
             folder_path=args.folder,
             output_dir=output_dir,
-            max_chars_per_page=args.max_chars_per_page,
             include_skipped=not args.no_skipped,
         )
 
