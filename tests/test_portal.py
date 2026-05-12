@@ -147,6 +147,155 @@ def test_generate_portal_doc_sorting():
 
 
 # ──────────────────────────────────────────────
+#  AI-readable (sr-only) text block tests
+# ──────────────────────────────────────────────
+
+def test_generate_portal_sr_only_block_exists():
+    """
+    Verify that the AI-readable text block (sr-only) exists in the generated
+    index.html. The block is a <section> with aria-hidden='true' and
+    position: absolute; left: -9999px, containing a <pre> with all file
+    contents in plain text format.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source_dir = os.path.join(tmpdir, "source")
+        output_dir = os.path.join(tmpdir, "output")
+        os.makedirs(source_dir)
+
+        # Create a text file
+        test_file = os.path.join(source_dir, "sample.txt")
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("This is some test content for the AI readable block.")
+
+        result = generate_portal(
+            folder_path=source_dir,
+            output_dir=output_dir,
+            show_progress=False,
+        )
+
+        assert result["index_file"] is not None
+        with open(result["index_file"], "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # The sr-only block should be a <section> with aria-hidden="true"
+        # and positioned off-screen
+        assert 'aria-hidden="true"' in content, \
+            "sr-only block should have aria-hidden='true'"
+        assert 'position: absolute; left: -9999px' in content, \
+            "sr-only block should be positioned off-screen"
+
+        # It should contain a <pre> tag inside with the AI-readable text
+        assert '<pre>' in content or '<pre >' in content, \
+            "sr-only block should contain a <pre> tag"
+
+        # The block should contain the KNOWLEDGE PORTAL header
+        assert "KNOWLEDGE PORTAL" in content, \
+            "sr-only block should contain the AI-readable header"
+        assert "AI-READABLE TEXT EXTRACT" in content, \
+            "sr-only block should contain the AI text extract label"
+
+        # Should contain metadata about the files
+        assert "Source folder" in content, \
+            "sr-only block should contain source folder info"
+        assert "Total files" in content, \
+            "sr-only block should contain total files count"
+        assert "Total chars" in content, \
+            "sr-only block should contain total chars count"
+
+
+def test_generate_portal_sr_only_block_contains_all_file_contents():
+    """
+    Verify that the AI-readable text block contains the full text content
+    of all parsed files. This ensures AI text extractors can read the
+    complete knowledge base from the off-screen block.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source_dir = os.path.join(tmpdir, "source")
+        output_dir = os.path.join(tmpdir, "output")
+        os.makedirs(source_dir)
+
+        # Create multiple text files with distinct content
+        file_contents = {
+            "alpha.txt": "Alpha file content: first document with unique text.",
+            "beta.txt": "Beta file content: second document with different text.",
+            "gamma.txt": "Gamma file content: third document with more unique text.",
+        }
+        for fname, fcontent in file_contents.items():
+            with open(os.path.join(source_dir, fname), 'w', encoding='utf-8') as f:
+                f.write(fcontent)
+
+        result = generate_portal(
+            folder_path=source_dir,
+            output_dir=output_dir,
+            show_progress=False,
+        )
+
+        assert result["index_file"] is not None
+        with open(result["index_file"], "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # The sr-only block (off-screen <section>) should contain the text
+        # content of ALL files. We locate the block by the known markers.
+        # First, verify all file names appear in the off-screen section
+        for fname in file_contents:
+            assert f"FILE: {fname}" in content, \
+                f"sr-only block should contain FILE header for '{fname}'"
+
+        # Verify the actual content of each file appears in the HTML
+        for fcontent in file_contents.values():
+            assert fcontent in content, \
+                f"sr-only block should contain file content: '{fcontent}'"
+
+        # The sr-only block should NOT contain the collapsible doc-block
+        # structure (it's plain-text inside <pre>, not per-file HTML blocks)
+        assert '<div class="doc-block"' in content, \
+            "Visible file blocks should still exist as collapsible blocks"
+
+
+def test_generate_portal_sr_only_block_with_large_content():
+    """
+    Verify that the AI-readable block handles larger content properly,
+    and that the 'END OF AI-READABLE TEXT EXTRACT' marker is present.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source_dir = os.path.join(tmpdir, "source")
+        output_dir = os.path.join(tmpdir, "output")
+        os.makedirs(source_dir)
+
+        # Create a file with larger content (multiple paragraphs)
+        large_content = "\n\n".join([
+            f"Paragraph {i}: This is a longer file with multiple paragraphs "
+            f"to test that the sr-only block captures all content correctly."
+            for i in range(5)
+        ])
+        test_file = os.path.join(source_dir, "large_doc.txt")
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write(large_content)
+
+        result = generate_portal(
+            folder_path=source_dir,
+            output_dir=output_dir,
+            show_progress=False,
+        )
+
+        assert result["index_file"] is not None
+        with open(result["index_file"], "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # The sr-only block should end with the footer marker
+        assert "END OF AI-READABLE TEXT EXTRACT" in content, \
+            "sr-only block should end with the closing footer"
+
+        # All paragraphs of the large content should be present
+        assert large_content in content, \
+            "Full large file content should appear in sr-only block"
+
+        # Verify file size info appears in the FILE header
+        assert "characters" in content, \
+            "sr-only block should contain character count info"
+
+
+# ──────────────────────────────────────────────
 #  Skipped file behavior tests
 # ──────────────────────────────────────────────
 

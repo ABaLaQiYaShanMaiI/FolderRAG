@@ -2,6 +2,9 @@
 FolderKnowledgeSiteGeneratorForAI — GUI Scanning & HTML Building Logic
 Extracted from gui.py for better separation of concerns.
 Provides folder scanning, file info collection, and single-HTML generation.
+
+NOTE: Truncation by max_chars has been REMOVED. Output is always complete.
+      For size-controlled splitting, use --split-chunks (src/chunker/).
 """
 
 import os
@@ -160,17 +163,16 @@ def build_html_from_files(
     folder_path: str,
     file_list: list,
     output_path: str,
-    max_chars: int = None,
     include_skipped: bool = True,
     language: str = "en",
 ) -> tuple:
     """
-    Parse files and generate HTML content.
+    Parse files and generate complete HTML content (no truncation).
+
     Returns (html_string, parsed_count, skipped_count, error_count, total_chars).
     """
     articles = []
     total_chars = 0
-    hit_limit = False
     parsed_count = 0
     skipped_count = 0
     error_count = 0
@@ -178,9 +180,6 @@ def build_html_from_files(
     skip_by_reason: dict[str, int] = {}
 
     for finfo in file_list:
-        if hit_limit:
-            break
-
         if not finfo['supported']:
             if include_skipped:
                 escaped_path = escape(finfo['rel_path'])
@@ -214,16 +213,6 @@ def build_html_from_files(
                 continue
 
             file_chars = len(text)
-            if max_chars is not None and total_chars + file_chars > max_chars:
-                allowed = max_chars - total_chars
-                if allowed <= 0:
-                    articles.append(
-                        f"  <!-- {_label('已达到 --max-chars 限制（', 'Reached --max-chars limit (')}{max_chars}{_label(' 字符），后续文件已截断', ' chars), remaining files truncated')} -->"
-                    )
-                    break
-                text = text[:allowed]
-                hit_limit = True
-
             escaped_text = escape(text)
             escaped_path = escape(finfo['rel_path'])
             escaped_size = escape(finfo['size_hr'])
@@ -241,12 +230,6 @@ def build_html_from_files(
         except Exception:
             error_count += 1
             continue
-
-        if hit_limit:
-            articles.append(
-                f"  <!-- {_label('已达到 --max-chars 限制（', 'Reached --max-chars limit (')}{max_chars}{_label(' 字符），后续文件已截断', ' chars), remaining files truncated')} -->"
-            )
-            break
 
     # Print skip reasons to console
     if skip_by_reason:
@@ -315,10 +298,12 @@ def build_html_from_files(
 def build_text_from_files(
     folder_path: str,
     file_list: list,
-    max_chars: int = None,
     include_skipped: bool = False,
 ) -> tuple:
     """Generate plain text output, each file wrapped with metadata separator + content.
+
+    NOTE: No truncation — always returns complete output.
+    For size-controlled splitting, use --split-chunks (src/chunker/).
 
     Returns (text, parsed_count, skipped_count, error_count, total_chars).
     """
@@ -327,13 +312,9 @@ def build_text_from_files(
     parsed_count = 0
     skipped_count = 0
     error_count = 0
-    hit_limit = False
     separator = "=" * 60  # separator between files
 
     for file_idx, finfo in enumerate(file_list):
-        if hit_limit:
-            break
-
         if not finfo['supported']:
             skipped_count += 1
             if include_skipped:
@@ -360,40 +341,12 @@ def build_text_from_files(
                 skipped_count += 1
                 continue
 
-            # Length truncation (consistent with HTML version logic)
-            file_chars = len(text)
-            if max_chars is not None and total_chars + file_chars > max_chars:
-                allowed = max_chars - total_chars
-                if allowed <= 0:
-                    # Already at or over limit: add truncation marker and stop
-                    remaining = len(file_list) - parsed_count - skipped_count - error_count
-                    parts.append(
-                        f"{separator}\n"
-                        f"[SKIPPED] {finfo['rel_path']} "
-                        f"(exceeds remaining char limit)\n"
-                        f"{separator}\n"
-                    )
-                    if remaining > 0:
-                        parts.append(
-                            f"\n... [Truncated at {max_chars:,} characters, "
-                            f"{remaining} remaining file(s) not included] ...\n"
-                        )
-                    else:
-                        parts.append(
-                            f"\n... [Truncated at {max_chars:,} characters] ...\n"
-                        )
-                    break
-                text = text[:allowed]
-                hit_limit = True
-            else:
-                hit_limit = False
-
-            # Build file block
+            # Build file block (no truncation)
             file_info = (
                 f"{separator}\n"
                 f"File: {finfo['rel_path']}\n"
                 f"Size: {finfo['size_hr']}\n"
-                f"Characters: {file_chars:,}\n"
+                f"Characters: {len(text):,}\n"
                 f"Type: {os.path.splitext(finfo['rel_path'])[1] or 'plain'}\n"
                 f"{separator}\n"
                 f"{text}\n\n"
@@ -401,19 +354,6 @@ def build_text_from_files(
             parts.append(file_info)
             total_chars += len(text)
             parsed_count += 1
-
-            if hit_limit and max_chars:
-                remaining = len(file_list) - parsed_count - skipped_count - error_count - 1  # -1 for current file
-                if remaining > 0:
-                    parts.append(
-                        f"\n... [Truncated at {max_chars:,} characters, "
-                        f"{remaining} remaining file(s) not included] ...\n"
-                    )
-                else:
-                    parts.append(
-                        f"\n... [Truncated at {max_chars:,} characters] ...\n"
-                    )
-                break
 
         except Exception:
             error_count += 1

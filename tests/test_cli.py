@@ -37,6 +37,19 @@ def _create_sample_folder(tmpdir: str) -> str:
     return folder
 
 
+def _create_large_sample_folder(tmpdir: str) -> str:
+    """Create a folder with sufficiently large files to test chunking."""
+    folder = os.path.join(tmpdir, "large_docs")
+    os.makedirs(folder, exist_ok=True)
+
+    # Create ~30K chars each file → 5 files = ~150K chars, fits well in small chunks
+    for i in range(5):
+        with open(os.path.join(folder, f"doc_{i}.txt"), "w", encoding="utf-8") as f:
+            f.write(f"# Document {i}\n\n" + "content line.\n" * 2000)
+
+    return folder
+
+
 # ──────────────────────────────────────────────
 #  Helper: run generate.py as subprocess
 # ──────────────────────────────────────────────
@@ -85,12 +98,11 @@ class TestTextExportMode:
         expected = output + ".txt"
         assert os.path.exists(expected), f"Expected {expected} to exist"
 
-    def test_max_chars_limit(self, tmp_path):
-        """Verify --max-chars truncates file content."""
+    def test_max_chars_warning_in_txt_mode(self, tmp_path):
+        """Verify --max-chars in TXT mode prints a warning (no longer truncates)."""
         folder = _create_sample_folder(str(tmp_path))
-        output = os.path.join(str(tmp_path), "output_truncated.txt")
+        output = os.path.join(str(tmp_path), "output.txt")
 
-        # Use small max-chars value
         rc, stdout, stderr = _run_generate([folder, "-o", output, "--max-chars", "20"])
 
         assert rc == 0, f"Expected exit code 0, got {rc}. stderr: {stderr}"
@@ -98,10 +110,10 @@ class TestTextExportMode:
 
         with open(output, "r", encoding="utf-8") as f:
             content = f.read()
-        # Should contain truncation indicator
-        assert "[Truncated at" in content, f"Missing truncation marker in: {content[:500]}"
-        # Unlimited output would be ~600+ chars; truncated should be < ~550
-        assert len(content) < 550, f"Expected truncated file < 550 chars, got {len(content)}"
+        # Must NOT be truncated (old behavior would have ~20 chars)
+        assert len(content) > 100, f"Expected full content (>100 chars), got {len(content)}"
+        # Must print a warning
+        assert "no effect" in stdout.lower(), f"Expected warning about no effect in: {stdout}"
 
     def test_missing_folder(self, tmp_path):
         """Verify error on non-existent folder."""
@@ -116,6 +128,89 @@ class TestTextExportMode:
         assert rc != 0, "Expected non-zero exit when -o is missing"
         # Should print usage/error
         assert "usage" in stdout.lower() or "error" in stderr.lower()
+
+
+# ──────────────────────────────────────────────
+#  Tests — Chunked Mode (--split-chunks)
+# ──────────────────────────────────────────────
+
+class TestChunkedMode:
+    """Test the chunked (--split-chunks) output mode."""
+
+    def test_basic_split_chunks(self, tmp_path):
+        """Generate chunked output from sample docs."""
+        folder = _create_sample_folder(str(tmp_path))
+        output_dir = os.path.join(str(tmp_path), "chunked_out")
+
+        rc, stdout, stderr = _run_generate([
+            folder, "--split-chunks", "-o", output_dir,
+        ])
+
+        assert rc == 0, f"Expected exit code 0, got {rc}. stderr: {stderr}"
+        assert os.path.isdir(output_dir), f"Output dir not created: {output_dir}"
+        # Should have part files and index
+        files = [f for f in os.listdir(output_dir) if f.startswith("part_") and f.endswith(".txt")]
+        assert len(files) > 0, f"No part files found in {output_dir}: {os.listdir(output_dir)}"
+        assert any(f.startswith("sample_docs_index") for f in os.listdir(output_dir)), \
+            f"Index HTML not found in {output_dir}: {os.listdir(output_dir)}"
+        assert "分片" in stdout or "chunk" in stdout.lower(), f"Unexpected stdout: {stdout}"
+
+    def test_split_chunks_with_max_chars_limit(self, tmp_path):
+        """Verify --max-chars in chunked mode truncates across all chunks."""
+        folder = _create_large_sample_folder(str(tmp_path))
+        output_dir = os.path.join(str(tmp_path), "chunked_limited")
+
+        # Use very small max to test global limit with large chunk size
+        rc, stdout, stderr = _run_generate([
+            folder, "--split-chunks", "-o", output_dir,
+            "--chunk-size", "500000", "--max-chars", "100",
+        ])
+
+        assert rc == 0, f"Expected exit code 0, got {rc}. stderr: {stderr}"
+        # Total content across all chunks should be ≤ ~100 chars
+        total_chars = 0
+        for fname in os.listdir(output_dir):
+            if fname.startswith("part_") and fname.endswith(".txt"):
+                fpath = os.path.join(output_dir, fname)
+                with open(fpath, "r", encoding="utf-8") as f:
+                    total_chars += len(f.read())
+        # Allow some overhead for separators, but should be small
+        assert total_chars < 500, f"Expected total < 500 chars with --max-chars=100, got {total_chars}"
+
+    def test_split_chunks_custom_chunk_size(self, tmp_path):
+        """Verify --chunk-size controls per-file limit."""
+        folder = _create_large_sample_folder(str(tmp_path))
+        output_dir = os.path.join(str(tmp_path), "chunked_custom")
+
+        rc, stdout, stderr = _run_generate([
+            folder, "--split-chunks", "-o", output_dir,
+            "--chunk-size", "20000",
+        ])
+
+        assert rc == 0, f"Expected exit code 0, got {rc}. stderr: {stderr}"
+        files = sorted([f for f in os.listdir(output_dir) if f.startswith("part_") and f.endswith(".txt")])
+        # Each file contains whole files (not truncated mid-file), so there should be multiple chunks
+        assert len(files) >= 2, f"Expected >=2 chunks with small chunk size, got {len(files)}"
+
+    def test_split_chunks_output_dir(self, tmp_path):
+        """Verify -o is used directly as output directory (no extra nesting)."""
+        folder = _create_sample_folder(str(tmp_path))
+        output_dir = os.path.join(str(tmp_path), "my_export")
+
+        # First generate
+        rc, stdout, stderr = _run_generate([
+            folder, "--split-chunks", "-o", output_dir,
+        ])
+        assert rc == 0
+
+        # Files should be directly in output_dir, not nested
+        assert os.path.isdir(output_dir)
+        direct_files = os.listdir(output_dir)
+        assert any(f.startswith("part_") for f in direct_files), \
+            f"part files should be directly in {output_dir}, got: {direct_files}"
+        # There should be no subdirectory with the same name
+        assert not any(os.path.isdir(os.path.join(output_dir, name)) for name in direct_files), \
+            f"Should not have subdirectories in {output_dir}, got: {direct_files}"
 
 
 # ──────────────────────────────────────────────
@@ -208,5 +303,6 @@ class TestCLIArgs:
         rc, stdout, stderr = _run_generate(["--help"])
         assert rc == 0
         # Should mention both modes
-        assert "传统模式" in stdout or "single" in stdout.lower() or "HTML" in stdout
-        assert "门户模式" in stdout or "portal" in stdout.lower()
+        assert "TXT" in stdout or "HTML" in stdout
+        assert "portal" in stdout.lower()
+        assert "split-chunks" in stdout.lower()

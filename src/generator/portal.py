@@ -27,6 +27,7 @@ from src.parser.dispatcher import parse_file
 from src.generator.templates import (
     wrap_index_html,
     build_file_content_blocks,
+    build_ai_raw_text_block,
     _get_file_type,
 )
 from src.utils import human_readable_size
@@ -370,6 +371,16 @@ def generate_portal(
     parsed_paths = {d["file"] for d in docs_meta if not d.get("skipped")}
     file_tree_html = build_file_tree_html(folder_path, parsed_files=parsed_paths) if include_skipped else ""
     file_contents_html = build_file_content_blocks(docs_texts)
+    
+    # Build hidden AI-readable text extract containing all file contents
+    # in plain text format, placed off-screen so AI text extractors can
+    # read everything without needing to expand collapsible blocks.
+    ai_raw_text_html = build_ai_raw_text_block(
+        docs_texts=docs_texts,
+        folder_name=folder_name,
+        total_chars=total_chars,
+        generated_at=now,
+    )
 
     if docs_meta or file_tree_html:
         index_html = wrap_index_html(
@@ -381,6 +392,7 @@ def generate_portal(
             file_tree_html=file_tree_html,
             file_contents_html=file_contents_html,
             language=language,
+            ai_raw_text_html=ai_raw_text_html,
         )
         index_path = os.path.join(output_dir, "index.html")
         with open(index_path, 'w', encoding='utf-8') as f:

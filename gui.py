@@ -54,16 +54,17 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'file_list': 'Files',
             'mode_label': 'Mode:',
             'single': 'Single TXT',
+            'chunked_mode': 'Split TXT',
             'portal_mode': 'Portal',
             'ready': 'Ready',
             'unavail': 'Unavailable',
             'output': 'Output:',
-            'max_chars': 'Max chars:',
             'unlimited': '(blank=unlimited)',
             'fname': 'Name:',
             'show_skip': 'Show unsupported',
             'out_dir': 'Output dir:',
             'gen_btn': 'Generate TXT',
+            'gen_chunked_btn': 'Generate Split TXT',
             'gen_portal_btn': 'Generate Portal',
             'start_hint': 'Select a folder to start',
             'status_ready': 'Ready',
@@ -72,6 +73,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'parseable': 'parseable',
             'gen_done': 'TXT generated!',
             'portal_done': 'Portal generated!',
+            'chunked_done': 'Split TXT generated!',
             'open_folder': 'Open output folder?',
             'server_start': 'Start Server',
             'server_stop': 'Stop Server',
@@ -80,6 +82,12 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'copy_url': 'Copy URL',
             'port_label': 'Port:',
             'total': 'Total',
+            'chunk_out_dir': 'Output dir:',
+            'chunk_size_label': 'Chunk size:',
+            'chunk_chars': 'chars',
+            'force_split': 'Force split oversized files',
+            'chunked_mode_desc': 'Split TXT: break large output into multiple part_*.txt files',
+            'chunked_mode_desc_en': 'Split TXT: break large output into multiple part_*.txt files',
         },
         'zh': {
             'title': 'FolderKnowledgeSiteGeneratorForAI',
@@ -96,6 +104,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'file_list': '文件列表',
             'mode_label': '模式：',
             'single': '单文件 TXT',
+            'chunked_mode': '分片 TXT',
             'portal_mode': '门户',
             'ready': '就绪',
             'unavail': '不可用',
@@ -106,6 +115,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'show_skip': '显示不支持标记',
             'out_dir': '输出目录：',
             'gen_btn': '生成 TXT',
+            'gen_chunked_btn': '生成分片 TXT',
             'gen_portal_btn': '生成门户',
             'start_hint': '请选择文件夹开始',
             'status_ready': '就绪',
@@ -114,6 +124,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'parseable': '个可解析',
             'gen_done': 'TXT 生成成功！',
             'portal_done': '门户生成成功！',
+            'chunked_done': '分片 TXT 生成成功！',
             'open_folder': '打开输出文件夹？',
             'server_start': '启动服务器',
             'server_stop': '停止服务器',
@@ -122,7 +133,13 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             'copy_url': '复制地址',
             'port_label': '端口：',
             'total': '总计',
-        }
+            'chunk_out_dir': '输出目录：',
+            'chunk_size_label': '分片大小：',
+            'chunk_chars': '字符',
+            'force_split': '强制切分超大文件',
+            'chunked_mode_desc': '分片模式：将大输出拆分为多个 part_*.txt 文件',
+            'chunked_mode_desc_en': 'Split TXT: break large output into multiple part_*.txt files',
+        },
     }
 
     def __init__(self, root):
@@ -133,6 +150,9 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.total_size = 0
         self.generating = False
         self.output_path = os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_export.txt")
+        # NOTE: max_chars per-file truncation has been REMOVED.
+        # TXT mode always outputs complete content.
+        # For size-controlled splitting, use --split-chunks CLI mode.
 
         # --- HTTP server state ---
         self._server_thread = None
@@ -160,7 +180,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         if lang != self._lang:
             saved_mode = self.mode_var.get() if hasattr(self, 'mode_var') else 'single'
             saved_skip = self.skip_var.get() if hasattr(self, 'skip_var') else True
-            saved_max_chars = self.max_ch_var.get() if hasattr(self, 'max_ch_var') else '50000'
             saved_fname = self.fname_var.get() if hasattr(self, 'fname_var') else 'knowledge_export'
             saved_output = self.out_var.get() if hasattr(self, 'out_var') else self.output_path
             saved_pout = self.pout_var.get() if hasattr(self, 'pout_var') else os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_portal")
@@ -171,7 +190,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
 
             self.mode_var.set(saved_mode)
             self.skip_var.set(saved_skip)
-            self.max_ch_var.set(saved_max_chars)
             self.fname_var.set(saved_fname)
             self.out_var.set(saved_output)
             self.pout_var.set(saved_pout)
@@ -396,17 +414,43 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         make_btn('Clear', self.clear_folder, self.COLORS['error'])
 
     def _on_drop(self, event):
-        files = event.data
-        if files:
-            path = files.strip('{}').strip('"')
+        """Handle file/folder drag-and-drop.
+        
+        In Windows, event.data may contain multiple paths wrapped in { } { }.
+        Extracts the first valid folder path and loads it.
+        """
+        raw = event.data or ""
+        if not raw:
+            return
+        
+        # Split multiple paths (Windows format: "{path1}" "{path2}")
+        # Handle both with and without curly brace wrapping
+        import re as _re
+        candidates = _re.findall(r'\{([^}]+)\}|"([^"]+)"|(\S+)', raw)
+        paths = [p for group in candidates for p in group if p]
+        
+        for candidate in paths:
+            path = candidate.strip().strip('"').strip("'")
             if os.path.isdir(path):
                 self.path_var.set(path)
                 self.load_folder(path)
-            else:
-                folder = os.path.dirname(path)
-                if os.path.isdir(folder):
-                    self.path_var.set(folder)
-                    self.load_folder(folder)
+                return
+            folder = os.path.dirname(path)
+            if os.path.isdir(folder):
+                self.path_var.set(folder)
+                self.load_folder(folder)
+                return
+        
+        # Fallback: treat entire data as a single path
+        path = raw.strip('{}').strip('"')
+        if os.path.isdir(path):
+            self.path_var.set(path)
+            self.load_folder(path)
+        else:
+            folder = os.path.dirname(path)
+            if os.path.isdir(folder):
+                self.path_var.set(folder)
+                self.load_folder(folder)
 
     def build_file_list(self):
         flist_f = ttk.Frame(self.main)
@@ -462,7 +506,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
 
         self.mode_var = tk.StringVar(value='single')
 
-        for val, txt in [('single', self.tr('single')), ('portal', self.tr('portal_mode'))]:
+        for val, txt in [('single', self.tr('single')), ('chunked', self.tr('chunked_mode')), ('portal', self.tr('portal_mode'))]:
             rb = tk.Radiobutton(mode_f, text=txt, variable=self.mode_var, value=val,
                                 command=self.on_mode_change, font=('Segoe UI', 10),
                                 bg=self.COLORS['card'], selectcolor=self.COLORS['card'])
@@ -495,14 +539,9 @@ class FolderKnowledgeSiteGeneratorForAIUI:
 
         r2 = tk.Frame(self.single_f, bg=self.COLORS['card'])
         r2.pack(fill=tk.X, pady=1)
-        tk.Label(r2, text=self.tr('max_chars'), font=('Segoe UI', 10),
-                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
-        self.max_ch_var = tk.StringVar(value='50000')
-        ttk.Entry(r2, textvariable=self.max_ch_var, width=10).pack(side=tk.LEFT, padx=(4, 4))
-        tk.Label(r2, text=self.tr('unlimited'), font=('Segoe UI', 9),
-                 bg=self.COLORS['card'], fg=self.COLORS['text_secondary']).pack(side=tk.LEFT)
 
-        tk.Frame(r2, bg=self.COLORS['border'], width=1).pack(side=tk.LEFT, padx=(10, 10), fill=tk.Y)
+        # Note: max_chars per-file truncation has been REMOVED in traditional TXT mode.
+        # For size-controlled splitting, use the --split-chunks CLI mode.
 
         tk.Label(r2, text=self.tr('fname'), font=('Segoe UI', 10),
                  bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
@@ -515,6 +554,35 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.skip_var = tk.BooleanVar(value=True)
         tk.Checkbutton(self.single_f, text=self.tr('show_skip'),
                        variable=self.skip_var, font=('Segoe UI', 10),
+                       bg=self.COLORS['card'], selectcolor=self.COLORS['card']).pack(anchor=tk.W, pady=(2, 0))
+
+        # Chunked mode settings (hidden by default)
+        self.chunked_f = tk.Frame(self.set_f, bg=self.COLORS['card'])
+        cr1 = tk.Frame(self.chunked_f, bg=self.COLORS['card'])
+        cr1.pack(fill=tk.X, pady=1)
+        tk.Label(cr1, text=self.tr('out_dir'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
+        self.chunk_out_var = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_chunked"))
+        ttk.Entry(cr1, textvariable=self.chunk_out_var, font=('Segoe UI', 9)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 4))
+        chunk_out_btn = tk.Button(cr1, text=self.tr('browse'), font=('Segoe UI', 9),
+                                  bg=self.COLORS['primary'], fg='white', relief='flat',
+                                  cursor='hand2', command=self.browse_chunked_out, padx=10)
+        chunk_out_btn.pack(side=tk.LEFT)
+        chunk_out_btn.bind('<Enter>', lambda e: chunk_out_btn.configure(bg=self.COLORS['primary_hover']))
+        chunk_out_btn.bind('<Leave>', lambda e: chunk_out_btn.configure(bg=self.COLORS['primary']))
+
+        cr2 = tk.Frame(self.chunked_f, bg=self.COLORS['card'])
+        cr2.pack(fill=tk.X, pady=1)
+        tk.Label(cr2, text=self.tr('chunk_size_label'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
+        self.chunk_size_var = tk.StringVar(value='500000')
+        ttk.Entry(cr2, textvariable=self.chunk_size_var, width=12).pack(side=tk.LEFT, padx=(4, 8))
+        tk.Label(cr2, text=self.tr('chunk_chars'), font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text_secondary']).pack(side=tk.LEFT)
+
+        self.force_split_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(self.chunked_f, text=self.tr('force_split'),
+                       variable=self.force_split_var, font=('Segoe UI', 10),
                        bg=self.COLORS['card'], selectcolor=self.COLORS['card']).pack(anchor=tk.W, pady=(2, 0))
 
         # Portal settings (hidden by default)
@@ -784,13 +852,20 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.footer_var.set(f"{len(self.file_list)} {self.tr('files')} | {sc} {self.tr('parseable')}")
 
     def on_mode_change(self):
-        is_portal = self.mode_var.get() == 'portal'
+        mode = self.mode_var.get()
+        is_portal = mode == 'portal'
+        is_chunked = mode == 'chunked'
         self.single_f.pack_forget()
         self.portal_f.pack_forget()
+        self.chunked_f.pack_forget()
         if is_portal:
             self.portal_f.pack(fill=tk.X)
             self.gen_btn.config(text=self.tr('gen_portal_btn'))
             self.status_var.set("Portal: single page with collapsible files + file tree" if self._lang == 'en' else "门户模式：单一页面，文件可折叠展开，带文件树导航")
+        elif is_chunked:
+            self.chunked_f.pack(fill=tk.X)
+            self.gen_btn.config(text='Generate Split TXT')
+            self.status_var.set("Split TXT: break large output into multiple part_*.txt files" if self._lang == 'en' else "分片模式：将大输出拆分为多个 part_*.txt 文件")
         else:
             self.single_f.pack(fill=tk.X)
             self.gen_btn.config(text=self.tr('gen_btn'))
@@ -800,6 +875,11 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         f = filedialog.askdirectory(title="Output directory")
         if f:
             self.pout_var.set(f)
+
+    def browse_chunked_out(self):
+        f = filedialog.askdirectory(title="Output directory for chunked files")
+        if f:
+            self.chunk_out_var.set(f)
 
     def update_out_path(self):
         name = self.fname_var.get().strip()
@@ -815,8 +895,52 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         # Save port before generation starts
         self._save_port()
 
-        is_portal = self.mode_var.get() == 'portal'
+        mode = self.mode_var.get()
+        is_portal = mode == 'portal'
+        is_chunked = mode == 'chunked'
         skip = self.skip_var.get()
+
+        if is_chunked:
+            # ---- Chunked/Split TXT mode ----
+            try:
+                from src.chunker import write_chunks, DEFAULT_CHUNK_SIZE
+            except ImportError:
+                messagebox.showerror("Error", "Chunked output module (src/chunker) not available")
+                return
+
+            out_dir = self.chunk_out_var.get().strip()
+            if not out_dir:
+                messagebox.showerror("Error", "Set output directory for chunked files")
+                return
+
+            try:
+                chunk_size = int(self.chunk_size_var.get().strip())
+                if chunk_size < 10000:
+                    messagebox.showerror("Error", "Chunk size must be at least 10,000")
+                    return
+            except ValueError:
+                messagebox.showerror("Error", "Invalid chunk size")
+                return
+
+            force_split = self.force_split_var.get()
+
+            self._start_gen("Generating split TXT files..." if self._lang == 'en' else "正在生成分片 TXT...")
+
+            def task():
+                try:
+                    result = write_chunks(
+                        folder_path=self.current_folder,
+                        output_dir=out_dir,
+                        chunk_size=chunk_size,
+                        force_split=force_split,
+                    )
+                    self.root.after(0, lambda: self._chunked_done(result))
+                except Exception as e:
+                    self.root.after(0, lambda e=e: self._gen_err(str(e)))
+
+            threading.Thread(target=task, daemon=True).start()
+            self._sim_progress()
+            return
 
         if is_portal:
             if not HAS_PORTAL:
@@ -854,23 +978,18 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         if not out.lower().endswith('.txt'):
             out += '.txt'
             self.out_var.set(out)
-        mc = self.max_ch_var.get().strip()
-        max_chars = None
-        if mc:
-            try:
-                max_chars = int(mc)
-                if max_chars <= 0:
-                    max_chars = None
-            except:
-                messagebox.showerror("Error", "Invalid integer")
-                return
+        # NOTE: max_chars truncation has been REMOVED.
+        # TXT mode always outputs complete file content.
+        # For size-controlled splitting, use the --split-chunks CLI option.
         self._start_gen("Generating TXT..." if self._lang == 'en' else "正在生成 TXT...")
 
         def task():
             try:
+                # Note: build_text_from_files no longer supports max_chars truncation.
+                # For size-controlled splitting, use --split-chunks CLI mode.
                 text, parsed, skipped, errors, chars = build_text_from_files(
                     self.current_folder, self.file_list,
-                    max_chars=max_chars, include_skipped=skip)
+                    include_skipped=skip)
                 with open(out, 'w', encoding='utf-8') as f:
                     f.write(text)
                 self.root.after(0, lambda: self.prog.config(value=100))
@@ -905,11 +1024,42 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         st = (f"{self.tr('gen_done')} {parsed} files" + (f", {skipped} skipped" if skipped else "") +
               (f", {errors} errors" if errors else "") + f" | {chars:,} chars | {human_readable_size(fs)}")
         self.status_var.set(st)
+        # Print hint about --split-chunks for large folders
+        print(f"[Hint] Single TXT file generated. If this file is too large for AI context, use:\n"
+              f"       python generate.py \"{self.current_folder}\" --split-chunks --chunk-size 500000 -o <output_dir>\n")
         self.footer_var.set(f"OK {os.path.basename(out_path)}")
         self.dot.delete('all')
         self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
         if messagebox.askyesno("Success", f"TXT generated!\n\nOutput: {out_path}\nParsed: {parsed}\nSkipped: {skipped}\nErrors: {errors}\nChars: {chars:,}\nSize: {human_readable_size(fs)}\n\n{self.tr('open_folder')}"):
             self._open_folder(out_path)
+
+    def _chunked_done(self, result):
+        self.generating = False
+        self.prog['value'] = 100
+        cc = result["chunks_count"]
+        tc = result["total_chars"]
+        tf = result["total_files"]
+        od = result["output_dir"]
+        idx = result.get("index_file", "")
+        self.gen_btn.config(state='normal', text='Generate Split TXT', bg=self.COLORS['primary'])
+        st = f"Split TXT generated: {cc} chunks, {tf} files, {tc:,} chars"
+        self.status_var.set(st)
+        self.footer_var.set(f"OK {cc} chunks")
+        self.dot.delete('all')
+        self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
+        msg = (
+            f"Split TXT generated successfully!\n\n"
+            f"Output: {od}\n"
+            f"Chunks: {cc}\n"
+            f"Files: {tf}\n"
+            f"Total chars: {tc:,}\n\n"
+        )
+        if messagebox.askyesno("Success", msg + "Open output folder?"):
+            try:
+                if sys.platform == 'win32':
+                    os.startfile(od)
+            except:
+                pass
 
     def _portal_done(self, result):
         self.generating = False

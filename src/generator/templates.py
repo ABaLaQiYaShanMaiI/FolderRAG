@@ -129,6 +129,83 @@ def build_file_content_blocks(docs_texts: list) -> str:
     return "\n".join(parts)
 
 
+def build_ai_raw_text_block(
+    docs_texts: list,
+    folder_name: str,
+    total_chars: int,
+    generated_at: str,
+) -> str:
+    """
+    Build a hidden AI-readable plain-text block containing all file contents.
+    
+    This produces a pure-text representation of all files, separated by
+    ASCII dividers, wrapped in a <pre> tag. It is placed in the HTML with
+    'position: absolute; left: -9999px' so that:
+      - Human users never see it
+      - Screen readers skip it (via aria-hidden="true")
+      - AI text extractors (Edge Copilot, ChatGPT, etc.) can read the full
+        content because they check 'display' property, not visual position
+    
+    Args:
+        docs_texts: list of dicts with keys:
+            - title: display title / relative path
+            - text: full file text content
+            - size: char count
+            - size_hr: human-readable size (optional)
+        folder_name: Source folder name
+        total_chars: Total character count across all files
+        generated_at: Timestamp string
+    
+    Returns:
+        HTML string: a <pre> block containing all file texts in plain text
+        format, already HTML-escaped and ready for template insertion.
+    """
+    lines = []
+    
+    # ── Header / metadata block ──
+    lines.append("=" * 80)
+    lines.append("  KNOWLEDGE PORTAL — AI-READABLE TEXT EXTRACT")
+    lines.append("=" * 80)
+    lines.append(f"  Source folder : {folder_name}")
+    lines.append(f"  Total files   : {len(docs_texts)}")
+    lines.append(f"  Total chars   : {total_chars:,}")
+    lines.append(f"  Generated at  : {generated_at}")
+    lines.append("=" * 80)
+    lines.append("")
+    
+    # ── Each file ──
+    for i, doc in enumerate(docs_texts):
+        title = doc.get("title", f"file_{i}")
+        text = doc.get("text", "")
+        size = doc.get("size", 0)
+        size_hr = doc.get("size_hr", "")
+        
+        # File header separator
+        lines.append("-" * 80)
+        lines.append(f"  FILE: {title}")
+        lines.append(f"  Size: {size_hr}  |  {size:,} characters")
+        lines.append("-" * 80)
+        lines.append("")
+        
+        # The actual file content — keep as-is (will be HTML-escaped once as a whole)
+        lines.append(text)
+        
+        # Trailing newline before next file
+        lines.append("")
+    
+    # Footer
+    lines.append("=" * 80)
+    lines.append("  END OF AI-READABLE TEXT EXTRACT")
+    lines.append("=" * 80)
+    
+    raw_text = "\n".join(lines)
+    
+    # HTML-escape the entire block and wrap in <pre> tags for formatting preservation
+    escaped_raw_text = escape(raw_text)
+    
+    return f"<pre>{escaped_raw_text}</pre>"
+
+
 def wrap_index_html(
     docs_meta: list,
     folder_name: str,
@@ -138,6 +215,7 @@ def wrap_index_html(
     file_tree_html: str = "",
     file_contents_html: str = "",
     language: str = "en",
+    ai_raw_text_html: str = "",
 ) -> str:
     """Wrap index page with all portal content."""
     escaped_folder = escape(folder_name)
@@ -193,6 +271,7 @@ def wrap_index_html(
         "cards_html": "",
         "file_tree_html": file_tree_html,
         "file_contents_html": file_contents_html,
+        "ai_raw_text_html": ai_raw_text_html,
         "meta_description_escaped": escaped_index_meta_desc,
         "meta_keywords_escaped": escaped_index_keywords,
     })

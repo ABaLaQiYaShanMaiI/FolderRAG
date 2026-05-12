@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-FolderKnowledgeSiteGeneratorForAI — Folder to Knowledge TXT / Portal Generator
+FolderKnowledgeSiteGeneratorForAI — Folder to Knowledge TXT / Portal / Chunked Generator
 
 Usage:
-    # TXT 模式：生成单个大 TXT 文件
+    # TXT 模式：生成单个完整 TXT 文件（无字符截断）
     python generate.py <folder_path> -o <output.txt>
-    python generate.py <folder_path> -o <output.txt> --max-chars 50000
+
+    # 分片模式：按固定大小自动拆分为多个文件，避免溢出 LLM 上下文
+    python generate.py <folder_path> --split-chunks -o <output_dir/> [--chunk-size 500000]
 
     # 门户模式：生成可搜索的单页知识门户
     python generate.py <folder_path> --portal -o <output_dir/>
 
 Scans all files in a folder, parses documents (PDF, DOCX, PPTX, XLSX, TXT, etc.),
 and generates:
-  - TXT 模式：一个纯文本文件，适合直接喂给 LLM
+  - TXT 模式：一个纯文本文件（完整内容，无截断）
+  - 分片模式：多个 part_NNN.txt 文件，每个 ≤ chunk-size 字符，并附带索引 HTML
   - 门户模式：一个可搜索、可折叠的单页知识门户，适合 AI 完整消费
 """
 
@@ -47,6 +50,16 @@ try:
 except ImportError:
     HAS_PORTAL = False
 
+# Try to import chunker
+try:
+    from src.chunker import write_chunks, DEFAULT_CHUNK_SIZE
+    HAS_CHUNKER = True
+except ImportError:
+    HAS_CHUNKER = False
+    DEFAULT_CHUNK_SIZE = 500_000
+    def write_chunks(*args, **kwargs):
+        raise ImportError("src.chunker module not available")
+
 # Logger setup — will be reconfigured when --log-file is parsed
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -68,27 +81,22 @@ def collect_files(root_dir):
                 yield full_path, rel_path
 
 
-def build_text_content(folder_path, max_chars=None):
-    """Parse all files under folder_path and return text content."""
+def build_text_content(folder_path):
+    """Parse all files under folder_path and return full text content (no truncation)."""
     file_list, _ = collect_files_info(folder_path)
     text, parsed, skipped, errors, chars = build_text_from_files(
-        folder_path, file_list, max_chars=max_chars, include_skipped=True
+        folder_path, file_list, include_skipped=True
     )
     return text, parsed, skipped, errors, chars
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="FolderKnowledgeSiteGeneratorForAI - 将文件夹中的文档解析为结构化 HTML 或分页知识门户"
+        description="FolderKnowledgeSiteGeneratorForAI - 将文件夹中的文档解析为 TXT / 分片 / 门户"
     )
     parser.add_argument("folder", help="要扫描的文件夹路径")
-    parser.add_argument("-o", "--output", required=True, help="输出路径（文件或目录）")
-    parser.add_argument(
-        "--max-chars",
-        type=int,
-        default=None,
-        help="[传统模式] 输出总字符数上限（默认不限）",
-    )
+    parser.add_argument("-o", "--output", required=True,
+                        help="输出路径：TXT模式为文件路径，分片/门户模式为目录路径")
     parser.add_argument(
         "--portal",
         action="store_true",
@@ -110,6 +118,29 @@ def main():
         type=str,
         default=None,
         help="将详细日志写入指定文件（默认仅输出到控制台）",
+    )
+    # ── 分片模式（Chunked Output）──
+    parser.add_argument(
+        "--split-chunks",
+        action="store_true",
+        help="[分片模式] 按固定大小将内容拆分到多个文件，避免单文件过大溢出 LLM 上下文",
+    )
+    parser.add_argument(
+        "--force-split",
+        action="store_true",
+        help="[分片模式] 强制切分超大文件（单文件超过 chunk-size 时自动分割到多个分片，而不是整文件独占一个分片）",
+    )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=DEFAULT_CHUNK_SIZE,
+        help=f"[分片模式] 每个分片的最大字符数（默认 {DEFAULT_CHUNK_SIZE:,}，设为 0 不限）",
+    )
+    parser.add_argument(
+        "--max-chars",
+        type=int,
+        default=None,
+        help="[分片模式] 所有分片的总字符数上限（默认不限，超出则截断最后一文件）",
     )
     args = parser.parse_args()
 
@@ -136,7 +167,43 @@ def main():
         print("错误：路径不是有效的文件夹：%s" % args.folder, file=sys.stderr)
         sys.exit(1)
 
-    if args.portal:
+    if args.split_chunks:
+        # ── 分片模式（Chunked Output）──
+        if not HAS_CHUNKER:
+            print("错误：分片模块不可用（src/chunker/__init__.py 未找到）", file=sys.stderr)
+            sys.exit(1)
+
+        folder_path = args.folder
+        # In chunked mode, -o is used directly as the output directory (no extra nesting).
+        output_dir = args.output
+
+        chunk_size = args.chunk_size
+        if chunk_size == 0:
+            chunk_size = None  # no per-chunk limit
+
+        print("[FolderKnowledgeSiteGeneratorForAI] 正在生成分片知识文件到: %s" % output_dir)
+        print()
+
+        result = write_chunks(
+            folder_path=folder_path,
+            output_dir=output_dir,
+            chunk_size=chunk_size or DEFAULT_CHUNK_SIZE,
+            max_chars=args.max_chars,
+            force_split=args.force_split,
+        )
+
+        if result.get("index_file") and result["chunks_count"] > 0:
+            print("✅ 分片知识文件生成成功！")
+            print(f"   [输出目录] {result['output_dir']}")
+            print(f"   [分片数量] {result['chunks_count']}")
+            print(f"   [文件总数] {result['total_files']}")
+            print(f"   [总字符数] {result['total_chars']:,}")
+            print(f"   [索引文件] {result['index_file']}")
+        else:
+            print("警告：未生成任何分片（文件夹为空或所有文件都无法解析）", file=sys.stderr)
+            sys.exit(1)
+
+    elif args.portal:
         # -- 门户模式 --
         if not HAS_PORTAL:
             print("错误：门户模块不可用（src/generator/portal.py 未找到）", file=sys.stderr)
@@ -177,10 +244,11 @@ def main():
             print("警告：未生成任何文档（文件夹为空或所有文件都无法解析）", file=sys.stderr)
             sys.exit(1)
     else:
-        # -- 传统模式 (TXT generation) --
-        text, parsed, skipped, errors, chars = build_text_content(
-            args.folder, max_chars=args.max_chars
-        )
+        # -- 传统 TXT 模式（完整内容，无截断）--
+        if args.max_chars is not None:
+            print("⚠️  warning: --max-chars has no effect in single TXT mode (no truncation).\n"
+                  "   Use --split-chunks to control output size by splitting into multiple files.\n")
+        text, parsed, skipped, errors, chars = build_text_content(args.folder)
 
         # Ensure .txt extension
         output_path = args.output
@@ -189,15 +257,16 @@ def main():
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(text)
-        print("OK - 已生成知识文件: %s" % output_path)
+        print("OK - 已生成完整知识文件: %s" % output_path)
         print("    共包含 %d 个文件内容, %d 总字符" % (parsed, chars))
         if skipped:
             print("    %d 个文件被跳过" % skipped)
         if errors:
             print("    %d 个文件解析出错" % errors)
         print()
-        print("提示：用 --portal 参数生成分页知识门户，可搜索且 Edge Copilot 友好")
-        print("提示：生成的 .txt 文件可直接上传到 DeepSeek/ChatGPT/Claude")
+        print("提示：为避免单个 TXT 文件过大溢出 LLM 上下文，建议使用：")
+        print("  --split-chunks : 按固定大小将内容自动拆分到多个文件")
+        print("  --portal       : 生成可搜索的知识门户（推荐）")
 
 
 if __name__ == "__main__":

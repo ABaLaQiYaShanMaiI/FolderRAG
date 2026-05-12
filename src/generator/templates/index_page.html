@@ -448,16 +448,9 @@ function collapseAll() {
 }
 
 // ── Jump to file content from tree ──
-function jumpToFile(filename) {
-  // The filename may be passed as raw text (from tree links) or already
-  // Base64-encoded (from portal.py). If it looks like valid Base64, use it
-  // directly; otherwise encode it to match data-filename-b64.
-  function isBase64(str) {
-    try { return btoa(atob(str)) === str; } catch(e) { return false; }
-  }
-  const encoded = isBase64(filename) ? filename : (function() {
-    try { return btoa(unescape(encodeURIComponent(filename))); } catch(e) { return btoa(filename); }
-  })();
+function jumpToFile(encoded) {
+  // Filename is always pre-encoded as Base64 by the tree builder.
+  // Decode it for the alert message, but query by Base64 data attribute.
   const block = document.querySelector(`.doc-block[data-filename-b64="${encoded}"]`);
   if (block) {
     // Expand this block if not already
@@ -471,7 +464,10 @@ function jumpToFile(filename) {
     block.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else {
     // File was skipped or could not be parsed - show helpful message
-    alert('This file could not be parsed or was skipped.\n\nFile: ' + filename);
+    // Decode the Base64 filename for the message
+    let decoded = encoded;
+    try { decoded = atob(encoded); } catch(e) { /* use encoded as-is */ }
+    alert('This file could not be parsed or was skipped.\n\nFile: ' + decoded);
   }
 }
 
@@ -542,5 +538,31 @@ function jumpToFile(filename) {
   });
 })();
 </script>
+
+<!-- ======================================================================== 
+     AI-READABLE TEXT EXTRACT (hidden from human viewers)
+     
+     This <section> contains all file contents in plain text format, placed 
+     with 'position: absolute; left: -9999px' so it is invisible to human 
+     users but still accessible to AI text extractors (Edge Copilot, ChatGPT 
+     Web, etc.). These extractors typically skip display:none nodes but DO 
+     read nodes that are merely positioned off-screen.
+     
+     The block uses:
+       - position: absolute; left: -9999px → visually hidden, DOM-present
+       - aria-hidden="true" → screen readers skip it
+       - <pre> tag → whitespace/line breaks preserved for AI readers
+     
+     Why not display: none? Because that is what the collapsible blocks use,
+     and it is exactly why AI cannot read collapsed content now. Using the 
+     same approach for this block would defeat the purpose.
+     
+     Why not remove it? This ensures AI can ingest the full knowledge base 
+     without needing to expand every collapsed block.
+     ======================================================================== -->
+<section aria-hidden="true" style="position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; white-space: pre-wrap;">
+$ai_raw_text_html
+</section>
+
 </body>
 </html>
