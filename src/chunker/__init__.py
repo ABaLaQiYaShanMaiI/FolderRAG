@@ -12,9 +12,8 @@ Key design decisions:
   with a warning printed to the user.
 - **Force-split mode** (--force-split): Splits oversized files across multiple chunks at chunk_size
   boundaries, so no single chunk exceeds the size limit.
-- Output: folder named `<source_folder>_export/` containing:
-    - `part_001.txt`, `part_002.txt`, ... (sorted sequentially)
-    - `<source_folder>_index.html` (manifest that lists files per chunk)
+- Output files named `<folder>_part_001.txt`, `<folder>_part_002.txt`, ... (sorted sequentially)
+- Index HTML named `<folder>_index.html` (manifest that lists files per chunk)
 """
 
 import os
@@ -325,7 +324,7 @@ def generate_index_html(
 {file_list_html}
                 </ul>
                 <p class="chunk-filename">
-                    📄 <code>{escape(folder_name)}_export/part_{chunk.index + 1:03d}.txt</code>
+                    📄 <code>{escape(folder_name)}_part_{chunk.index + 1:03d}.txt</code>
                 </p>
             </div>
         </div>""")
@@ -523,7 +522,7 @@ def write_chunks(
 
     # 3. Write TXT files
     for chunk in chunks:
-        part_name = f"part_{chunk.index + 1:03d}.txt"
+        part_name = f"{folder_name}_part_{chunk.index + 1:03d}.txt"
         part_path = os.path.join(output_dir, part_name)
         text_content = chunk.to_text(folder_name)
         with open(part_path, "w", encoding="utf-8") as f:
@@ -554,7 +553,7 @@ def write_chunks(
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("=" * 60 + "\n\n")
         for chunk in chunks:
-            f.write(f"Chunk {chunk.index + 1:03d} (part_{chunk.index + 1:03d}.txt):\n")
+            f.write(f"Chunk {chunk.index + 1:03d} ({folder_name}_part_{chunk.index + 1:03d}.txt):\n")
             f.write(f"  Files: {len(chunk.files)}, Chars: {chunk.accumulated_chars:,}\n")
             for fe in chunk.files:
                 f.write(f"    - {fe['rel_path']} ({fe['size_hr']}, {fe['size']:,} chars)\n")
@@ -568,8 +567,8 @@ def write_chunks(
     logger.info("")
     for chunk in chunks:
         logger.info(
-            "         %3d. part_%03d.txt  (%s chars, %d files)",
-            chunk.index + 1, chunk.index + 1, f"{chunk.accumulated_chars:,}", len(chunk.files)
+            "         %3d. %s_part_%03d.txt  (%s chars, %d files)",
+            chunk.index + 1, folder_name, chunk.index + 1, f"{chunk.accumulated_chars:,}", len(chunk.files)
         )
     logger.info("")
     logger.info("  📋  Usage: Submit each part_*.txt to your AI in order.")

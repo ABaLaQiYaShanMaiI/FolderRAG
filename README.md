@@ -144,6 +144,7 @@ usage: python generate.py [-h] -o OUTPUT [--portal] [--no-skipped]
                           [--max-chars-per-file MAX_CHARS_PER_FILE]
                           [--log-file LOG_FILE] [--split-chunks]
                           [--chunk-size CHUNK_SIZE] [--max-chars MAX_CHARS]
+                          [--lang {en,zh}]
                           folder
 ```
 
@@ -178,6 +179,8 @@ usage: python generate.py [-h] -o OUTPUT [--portal] [--no-skipped]
 | `--portal` | 启用门户模式，生成可搜索的单页知识门户 |
 | `--no-skipped` | 不在首页中显示不支持的文档标记 |
 | `--max-chars-per-file MAX_CHARS_PER_FILE` | 单文件最大字符数（默认 50,000，设为 0 不限） |
+| `--lang, --language` | 输出语言（en/zh，默认 en） |
+
 
 ---
 

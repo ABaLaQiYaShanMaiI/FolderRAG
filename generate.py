@@ -46,6 +46,7 @@ except ImportError:
 # Try to import portal generator
 try:
     from src.generator.portal import generate_portal
+    from src.generator.portal import generate_portal_split
     HAS_PORTAL = True
 except ImportError:
     HAS_PORTAL = False
@@ -103,6 +104,11 @@ def main():
         help="[门户模式] 生成可搜索的单页知识门户（推荐 AI 使用）",
     )
     parser.add_argument(
+        "--split-files",
+        action="store_true",
+        help="[门户模式] 拆分模式：每个文件生成独立子页面，主页面仅提供目录树和搜索",
+    )
+    parser.add_argument(
         "--no-skipped",
         action="store_true",
         help="[门户模式] 不在首页中显示不支持的文档标记",
@@ -141,6 +147,13 @@ def main():
         type=int,
         default=None,
         help="[分片模式] 所有分片的总字符数上限（默认不限，超出则截断最后一文件）",
+    )
+    parser.add_argument(
+        "--lang", "--language",
+        type=str,
+        default="en",
+        choices=["en", "zh"],
+        help="输出语言：en=英语, zh=中文（默认 en）",
     )
     args = parser.parse_args()
 
@@ -216,12 +229,23 @@ def main():
         max_cpf = args.max_chars_per_file
         if max_cpf == 0:
             max_cpf = None
-        result = generate_portal(
-            folder_path=args.folder,
-            output_dir=output_dir,
-            include_skipped=not args.no_skipped,
-            max_chars_per_file=max_cpf,
-        )
+        
+        if args.split_files:
+            result = generate_portal_split(
+                folder_path=args.folder,
+                output_dir=output_dir,
+                include_skipped=not args.no_skipped,
+                max_chars_per_file=max_cpf,
+                language=args.lang,
+            )
+        else:
+            result = generate_portal(
+                folder_path=args.folder,
+                output_dir=output_dir,
+                include_skipped=not args.no_skipped,
+                max_chars_per_file=max_cpf,
+                language=args.lang,
+            )
 
         index_file = result.get("index_file")
         if index_file and os.path.exists(index_file):
@@ -236,10 +260,17 @@ def main():
                 print("   [错误文件] %d" % result['errors'])
             print()
             print("[使用提示]")
-            print("   1. 双击 index.html 在浏览器中打开")
-            print("   2. 搜索关键词找到目标文档")
-            print("   3. 点击文档标题在新标签页打开")
-            print("   4. 按 Ctrl+Shift+. 唤醒 Edge Copilot 提问")
+            if args.split_files:
+                print("   1. 双击 index.html 在浏览器中打开（拆分模式）")
+                print("   2. 主页面显示文件树和搜索框，可搜索文件名和关键词")
+                print("   3. 点击文件名在新标签页打开对应子页面")
+                print("   4. 可一次性按 Ctrl+点击 打开多个标签页")
+                print("   5. 唤醒 Edge Copilot 自动读取所有打开标签页的内容")
+            else:
+                print("   1. 双击 index.html 在浏览器中打开")
+                print("   2. 搜索关键词找到目标文档")
+                print("   3. 点击文档标题在新标签页打开")
+                print("   4. 按 Ctrl+Shift+. 唤醒 Edge Copilot 提问")
         else:
             print("警告：未生成任何文档（文件夹为空或所有文件都无法解析）", file=sys.stderr)
             sys.exit(1)

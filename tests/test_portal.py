@@ -87,7 +87,6 @@ def test_generate_portal_with_text_file():
         assert os.path.exists(result["index_file"])
 
         # Portal is single-page - all content is in index.html
-        # No separate docs/ directory is generated
         with open(result["index_file"], "r", encoding="utf-8") as f:
             content = f.read()
         assert "test_doc.txt" in content
@@ -147,25 +146,23 @@ def test_generate_portal_doc_sorting():
 
 
 # ──────────────────────────────────────────────
-#  AI-readable (sr-only) text block tests
+#  Always-expanded content tests (replaces sr-only tests)
 # ──────────────────────────────────────────────
 
-def test_generate_portal_sr_only_block_exists():
+def test_doc_content_always_visible():
     """
-    Verify that the AI-readable text block (sr-only) exists in the generated
-    index.html. The block is a <section> with aria-hidden='true' and
-    position: absolute; left: -9999px, containing a <pre> with all file
-    contents in plain text format.
+    Verify that .doc-content blocks are always visible (no display:none)
+    in the generated portal. All file contents should be in the DOM flow
+    without requiring any user interaction to expand.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         source_dir = os.path.join(tmpdir, "source")
         output_dir = os.path.join(tmpdir, "output")
         os.makedirs(source_dir)
 
-        # Create a text file
         test_file = os.path.join(source_dir, "sample.txt")
         with open(test_file, 'w', encoding='utf-8') as f:
-            f.write("This is some test content for the AI readable block.")
+            f.write("This is visible content for AI reading.")
 
         result = generate_portal(
             folder_path=source_dir,
@@ -177,52 +174,34 @@ def test_generate_portal_sr_only_block_exists():
         with open(result["index_file"], "r", encoding="utf-8") as f:
             content = f.read()
 
-        # The sr-only block should be a <section> with aria-hidden="true"
-        # and positioned off-screen
-        assert 'aria-hidden="true"' in content, \
-            "sr-only block should have aria-hidden='true'"
-        assert 'position: absolute; left: -9999px' in content, \
-            "sr-only block should be positioned off-screen"
+        # Verify that doc-content does NOT have style="display:none"
+        # The new template removes the inline display:none from doc-content
+        assert 'style="display:none"' not in content, \
+            "doc-content should not have display:none (content should always be visible)"
 
-        # It should contain a <pre> tag inside with the AI-readable text
-        assert '<pre>' in content or '<pre >' in content, \
-            "sr-only block should contain a <pre> tag"
+        # Verify the file content text is present in the DOM
+        assert "This is visible content for AI reading." in content, \
+            "File content should be present and visible in the DOM"
 
-        # The block should contain the KNOWLEDGE PORTAL header
-        assert "KNOWLEDGE PORTAL" in content, \
-            "sr-only block should contain the AI-readable header"
-        assert "AI-READABLE TEXT EXTRACT" in content, \
-            "sr-only block should contain the AI text extract label"
-
-        # Should contain metadata about the files
-        assert "Source folder" in content, \
-            "sr-only block should contain source folder info"
-        assert "Total files" in content, \
-            "sr-only block should contain total files count"
-        assert "Total chars" in content, \
-            "sr-only block should contain total chars count"
+        # Verify no sr-only block exists (the <section> with aria-hidden)
+        assert 'aria-hidden="true"' not in content, \
+            "sr-only block should not exist in Portal mode"
 
 
-def test_generate_portal_sr_only_block_contains_all_file_contents():
+def test_each_file_block_has_copy_button():
     """
-    Verify that the AI-readable text block contains the full text content
-    of all parsed files. This ensures AI text extractors can read the
-    complete knowledge base from the off-screen block.
+    Verify that every file block in the portal contains a copy button
+    (with class .copy-file-btn) so users can copy individual file contents.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         source_dir = os.path.join(tmpdir, "source")
         output_dir = os.path.join(tmpdir, "output")
         os.makedirs(source_dir)
 
-        # Create multiple text files with distinct content
-        file_contents = {
-            "alpha.txt": "Alpha file content: first document with unique text.",
-            "beta.txt": "Beta file content: second document with different text.",
-            "gamma.txt": "Gamma file content: third document with more unique text.",
-        }
-        for fname, fcontent in file_contents.items():
+        # Create multiple files
+        for i, fname in enumerate(["alpha.txt", "beta.txt", "gamma.txt"]):
             with open(os.path.join(source_dir, fname), 'w', encoding='utf-8') as f:
-                f.write(fcontent)
+                f.write(f"Content of {fname}.")
 
         result = generate_portal(
             folder_path=source_dir,
@@ -234,43 +213,39 @@ def test_generate_portal_sr_only_block_contains_all_file_contents():
         with open(result["index_file"], "r", encoding="utf-8") as f:
             content = f.read()
 
-        # The sr-only block (off-screen <section>) should contain the text
-        # content of ALL files. We locate the block by the known markers.
-        # First, verify all file names appear in the off-screen section
-        for fname in file_contents:
-            assert f"FILE: {fname}" in content, \
-                f"sr-only block should contain FILE header for '{fname}'"
+        # Verify copy-file-btn class exists for each file
+        copy_btn_count = content.count('class="copy-file-btn"')
+        assert copy_btn_count == 3, \
+            f"Expected 3 copy-file-btn elements, found {copy_btn_count}"
 
-        # Verify the actual content of each file appears in the HTML
-        for fcontent in file_contents.values():
-            assert fcontent in content, \
-                f"sr-only block should contain file content: '{fcontent}'"
+        # Verify each button has a data-file-index attribute
+        import re
+        indices = re.findall(r'data-file-index="(\d+)"', content)
+        assert len(indices) == 3, \
+            f"Expected 3 data-file-index attributes, found {len(indices)}"
+        # Indices should be 0, 1, 2
+        assert set(indices) == {'0', '1', '2'}, \
+            f"Expected data-file-indices 0,1,2, got {set(indices)}"
 
-        # The sr-only block should NOT contain the collapsible doc-block
-        # structure (it's plain-text inside <pre>, not per-file HTML blocks)
-        assert '<div class="doc-block"' in content, \
-            "Visible file blocks should still exist as collapsible blocks"
+        # Verify each pre element has a matching id
+        for i in range(3):
+            assert f'id="file-content-{i}"' in content, \
+                f"Expected pre element with id='file-content-{i}'"
 
 
-def test_generate_portal_sr_only_block_with_large_content():
+def test_copy_button_calls_copy_function():
     """
-    Verify that the AI-readable block handles larger content properly,
-    and that the 'END OF AI-READABLE TEXT EXTRACT' marker is present.
+    Verify that copy buttons invoke the copyFileContent JavaScript function
+    with onclick handler.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         source_dir = os.path.join(tmpdir, "source")
         output_dir = os.path.join(tmpdir, "output")
         os.makedirs(source_dir)
 
-        # Create a file with larger content (multiple paragraphs)
-        large_content = "\n\n".join([
-            f"Paragraph {i}: This is a longer file with multiple paragraphs "
-            f"to test that the sr-only block captures all content correctly."
-            for i in range(5)
-        ])
-        test_file = os.path.join(source_dir, "large_doc.txt")
+        test_file = os.path.join(source_dir, "test.txt")
         with open(test_file, 'w', encoding='utf-8') as f:
-            f.write(large_content)
+            f.write("Test content for copy.")
 
         result = generate_portal(
             folder_path=source_dir,
@@ -282,17 +257,92 @@ def test_generate_portal_sr_only_block_with_large_content():
         with open(result["index_file"], "r", encoding="utf-8") as f:
             content = f.read()
 
-        # The sr-only block should end with the footer marker
-        assert "END OF AI-READABLE TEXT EXTRACT" in content, \
-            "sr-only block should end with the closing footer"
+        # Verify the copy button has an onclick calling copyFileContent(this)
+        assert 'onclick="copyFileContent(this)"' in content, \
+            "Copy button should call copyFileContent(this) on click"
 
-        # All paragraphs of the large content should be present
-        assert large_content in content, \
-            "Full large file content should appear in sr-only block"
+        # Verify the copyFileContent function exists in the script
+        assert "function copyFileContent" in content, \
+            "copyFileContent JavaScript function should be defined"
 
-        # Verify file size info appears in the FILE header
-        assert "characters" in content, \
-            "sr-only block should contain character count info"
+
+def test_no_sr_only_block_in_portal():
+    """
+    Verify that the sr-only block (the old <section> with aria-hidden and
+    off-screen positioning, containing AI-readable text) is NOT present
+    in the generated portal page.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source_dir = os.path.join(tmpdir, "source")
+        output_dir = os.path.join(tmpdir, "output")
+        os.makedirs(source_dir)
+
+        test_file = os.path.join(source_dir, "test.txt")
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("Content for Portal mode.")
+
+        result = generate_portal(
+            folder_path=source_dir,
+            output_dir=output_dir,
+            show_progress=False,
+        )
+
+        assert result["index_file"] is not None
+        with open(result["index_file"], "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # The sr-only block markers should NOT be present
+        assert "KNOWLEDGE PORTAL" not in content, \
+            "Old sr-only KNOWLEDGE PORTAL header should not exist"
+        assert "AI-READABLE TEXT EXTRACT" not in content, \
+            "Old AI-READABLE TEXT EXTRACT label should not exist"
+        assert "END OF AI-READABLE TEXT EXTRACT" not in content, \
+            "Old sr-only end marker should not exist"
+
+
+def test_portal_uses_minimal_font_and_compact_layout():
+    """
+    Verify that the portal uses the minimal font size (3px) and compact
+    layout to maximize code density for AI text extraction.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source_dir = os.path.join(tmpdir, "source")
+        output_dir = os.path.join(tmpdir, "output")
+        os.makedirs(source_dir)
+
+        test_file = os.path.join(source_dir, "test.txt")
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("Test content.")
+
+        result = generate_portal(
+            folder_path=source_dir,
+            output_dir=output_dir,
+            show_progress=False,
+        )
+
+        assert result["index_file"] is not None
+        with open(result["index_file"], "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Verify minimal font size in CSS
+        assert "font-size: 3px" in content or "font-size:3px" in content, \
+            "CSS should have font-size: 3px for .doc-content pre"
+
+        # Verify white-space: pre-wrap for wrapping
+        assert "white-space: pre-wrap" in content or "white-space:pre-wrap" in content, \
+            "CSS should have white-space: pre-wrap for wrapping"
+
+        # Verify word-break: break-all exists
+        assert "word-break: break-all" in content or "word-break:break-all" in content, \
+            "CSS should have word-break: break-all"
+
+        # Verify overflow-x: hidden to disable horizontal scroll
+        assert "overflow-x: hidden" in content or "overflow-x:hidden" in content, \
+            "CSS should have overflow-x: hidden"
+
+        # Verify line-height: 1.2 for compact lines
+        assert "line-height: 1.2" in content or "line-height:1.2" in content, \
+            "CSS should have line-height: 1.2"
 
 
 # ──────────────────────────────────────────────
@@ -340,10 +390,22 @@ def test_skipped_files_do_not_generate_pages():
         with open(result["index_file"], "r", encoding="utf-8") as f:
             content = f.read()
 
-        # The .bin file should NOT have a doc-block (data-filename attribute)
-        # It may appear in the file tree, but NOT as a collapsible content block
-        assert 'data-filename="notes.bin"' not in content, \
-            ".bin should not have a doc-block (collapsible content block)"
+        # The .bin file should NOT have a file-content-[id] pre element
+        # (It may appear in the file tree, but NOT as a content block)
+        # Notes.bin appears in the file tree, but the skipped files do NOT get
+        # doc-blocks (content blocks). Verify that notes.bin does NOT have a
+        # matching pre with id="file-content-*" in a .doc-block.
+        import re
+        file_content_ids = re.findall(r'id="file-content-\d+"', content)
+        assert 'notes.bin' in content, "notes.bin should appear in file tree"
+        # But it should NOT appear inside a doc-block's pre content
+        # The readable.txt file is the only parsed doc, so there should be
+        # only one pre with id="file-content-0"
+        assert len(file_content_ids) == 1, \
+            f"Expected exactly 1 file-content block (for readable.txt), found {len(file_content_ids)}"
+        assert 'id="file-content-0"' in content, "readable.txt should have file-content-0"
+        assert 'id="file-content-1"' not in content, \
+            "notes.bin should not have a file-content block"
 
         # Verify the skipped count reflects the unsupported file
         assert result["skipped"] >= 1, f"Expected at least 1 skipped, got {result['skipped']}"

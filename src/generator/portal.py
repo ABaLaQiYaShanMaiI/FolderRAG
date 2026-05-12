@@ -27,7 +27,6 @@ from src.parser.dispatcher import parse_file
 from src.generator.templates import (
     wrap_index_html,
     build_file_content_blocks,
-    build_ai_raw_text_block,
     _get_file_type,
 )
 from src.utils import human_readable_size
@@ -324,10 +323,15 @@ def generate_portal(
             if last_newline > max_chars_per_file * 0.5:
                 truncated = truncated[:last_newline]
             text = truncated
-            text += (
-                f"\n\n... [截断：原文 {char_count:,} 字符，仅展示前 {max_chars_per_file:,} 字符] ...\n"
-                f"... [Truncated: original {char_count:,} chars, showing first {max_chars_per_file:,} chars] ..."
-            )
+            # Bilingual truncation message based on language parameter
+            if language == "zh":
+                text += (
+                    f"\n\n... [截断：原文 {char_count:,} 字符，仅展示前 {max_chars_per_file:,} 字符] ...\n"
+                )
+            else:
+                text += (
+                    f"\n\n... [Truncated: original {char_count:,} chars, showing first {max_chars_per_file:,} chars] ...\n"
+                )
             char_count = len(text)
 
         total_chars += char_count
@@ -372,16 +376,6 @@ def generate_portal(
     file_tree_html = build_file_tree_html(folder_path, parsed_files=parsed_paths) if include_skipped else ""
     file_contents_html = build_file_content_blocks(docs_texts)
     
-    # Build hidden AI-readable text extract containing all file contents
-    # in plain text format, placed off-screen so AI text extractors can
-    # read everything without needing to expand collapsible blocks.
-    ai_raw_text_html = build_ai_raw_text_block(
-        docs_texts=docs_texts,
-        folder_name=folder_name,
-        total_chars=total_chars,
-        generated_at=now,
-    )
-
     if docs_meta or file_tree_html:
         index_html = wrap_index_html(
             docs_meta=docs_meta,
@@ -392,9 +386,11 @@ def generate_portal(
             file_tree_html=file_tree_html,
             file_contents_html=file_contents_html,
             language=language,
-            ai_raw_text_html=ai_raw_text_html,
         )
-        index_path = os.path.join(output_dir, "index.html")
+        # Prefix with folder name to avoid collisions when multiple projects
+        # are generated into the same output directory
+        index_filename = f"{folder_name}_index.html"
+        index_path = os.path.join(output_dir, index_filename)
         with open(index_path, 'w', encoding='utf-8') as f:
             f.write(index_html)
         logger.info("Portal index: %s", index_path)
@@ -411,3 +407,306 @@ def generate_portal(
         "index_file": index_path,
         "folder_name": folder_name,
     }
+
+
+def generate_portal_split(
+    folder_path: str,
+    output_dir: str,
+    include_skipped: bool = True,
+    show_progress: bool = True,
+    language: str = "en",
+    max_chars_per_file: int = _DEFAULT_MAX_CHARS_PER_FILE,
+) -> dict:
+    """Generate a split-file knowledge portal with index page + individual subpages.
+    
+    Produces:
+        output_dir/index.html          - Main index page with file tree, search, stats
+        output_dir/docs/*.html         - Individual file subpages
+    
+    Args:
+        folder_path: Root folder to scan.
+        output_dir: Output directory for generated portal.
+        include_skipped: Whether to show skipped file entries in file tree.
+        show_progress: Whether to print progress to console.
+        language: Language code ('en' or 'zh').
+        max_chars_per_file: Maximum characters per file before truncation.
+    
+    Returns:
+        dict with keys: doc_count, total_chars, skipped, errors, output_dir, index_file, folder_name
+    """
+    from src.generator.templates import (
+        build_subpage_html,
+        build_file_tree_split_html,
+        build_search_index_json,
+        wrap_index_html,
+    )
+    
+    if not os.path.isdir(folder_path):
+        raise ValueError("Not a valid folder: %s" % folder_path)
+
+    os.makedirs(output_dir, exist_ok=True)
+    docs_dir = os.path.join(output_dir, "docs")
+    os.makedirs(docs_dir, exist_ok=True)
+
+    # ── Scan all files ──
+    all_files = []
+    for dirpath, dirnames, filenames in os.walk(folder_path):
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in _FILTER_DIRS and not d.startswith('.')
+        ]
+        for fname in filenames:
+            full_path = os.path.join(dirpath, fname)
+            rel_path = os.path.relpath(full_path, folder_path)
+            if _should_filter_file(rel_path):
+                continue
+            if os.path.isfile(full_path):
+                all_files.append((full_path, rel_path))
+
+    total_files = len(all_files)
+
+    if total_files == 0:
+        logger.warning("No parseable files found in %s", folder_path)
+        return {
+            "doc_count": 0,
+            "total_chars": 0,
+            "skipped": 0,
+            "errors": 0,
+            "output_dir": output_dir,
+            "index_file": None,
+            "folder_name": os.path.basename(os.path.abspath(folder_path)),
+        }
+
+    folder_name = os.path.basename(os.path.abspath(folder_path))
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    docs_texts = []
+    docs_meta = []
+    total_chars = 0
+    parsed_count = 0
+    skipped_count = 0
+    error_count = 0
+    skip_by_reason: dict[str, int] = {}
+
+    if show_progress:
+        print("  [Scan] Found %d files, parsing..." % total_files)
+
+    for file_idx, (full_path, rel_path) in enumerate(all_files):
+        file_size = os.path.getsize(full_path)
+        size_hr = human_readable_size(file_size)
+
+        if show_progress:
+            pct = (file_idx + 1) / total_files * 100
+            bar_len = 30
+            filled = int(bar_len * (file_idx + 1) / total_files)
+            bar = '#' * filled + '.' * (bar_len - filled)
+            print("\r  [%s] %d/%d (%.0f%%) - %s" % (
+                bar, file_idx + 1, total_files, pct, rel_path[:60]),
+                end='', flush=True)
+
+        try:
+            result = parse_file(full_path)
+        except Exception as e:
+            logger.exception("Error parsing %s: %s", rel_path, e)
+            if show_progress:
+                print("\n  [Error] %s - %s" % (rel_path, e))
+            error_count += 1
+            continue
+
+        try:
+            mtime = os.path.getmtime(full_path)
+            mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            mtime_str = ""
+
+        if result is None:
+            skipped_count += 1
+            skip_by_reason['parser returned no content'] = skip_by_reason.get('parser returned no content', 0) + 1
+            continue
+
+        text = (result.get("text") or "").strip()
+        if not text:
+            skipped_count += 1
+            skip_by_reason['empty content after parsing'] = skip_by_reason.get('empty content after parsing', 0) + 1
+            continue
+
+        char_count = len(text)
+
+        if max_chars_per_file and char_count > max_chars_per_file:
+            truncated = text[:max_chars_per_file]
+            last_newline = truncated.rfind('\n')
+            if last_newline > max_chars_per_file * 0.5:
+                truncated = truncated[:last_newline]
+            text = truncated
+            if language == "zh":
+                text += (
+                    f"\n\n... [截断：原文 {char_count:,} 字符，仅展示前 {max_chars_per_file:,} 字符] ...\n"
+                )
+            else:
+                text += (
+                    f"\n\n... [Truncated: original {char_count:,} chars, showing first {max_chars_per_file:,} chars] ...\n"
+                )
+            char_count = len(text)
+
+        total_chars += char_count
+        keywords = extract_keywords(text)
+        preview = text[:200].replace('\n', ' ').strip()
+        file_type = _get_file_type(rel_path)
+
+        doc_data = {
+            "title": rel_path,
+            "text": text,
+            "size": char_count,
+            "file_type": file_type,
+            "size_hr": size_hr,
+            "tags": keywords[:5],
+        }
+
+        docs_texts.append(doc_data)
+        docs_meta.append({
+            "title": rel_path,
+            "file": rel_path,
+            "size": char_count,
+            "size_hr": size_hr,
+            "preview": preview,
+            "tags": keywords[:5],
+            "skipped": False,
+            "mtime": mtime_str,
+        })
+        parsed_count += 1
+
+        # ── Generate subpage for this file ──
+        subpage_html = build_subpage_html(doc_data, folder_name, language)
+        subpage_filename = _path_to_subpage_filename(rel_path)
+        subpage_path = os.path.join(docs_dir, subpage_filename)
+        with open(subpage_path, 'w', encoding='utf-8') as f:
+            f.write(subpage_html)
+
+    if show_progress:
+        print()
+
+    if skip_by_reason:
+        print(f"  [Skip Summary] {skipped_count} files skipped:")
+        for reason, count in sorted(skip_by_reason.items(), key=lambda x: -x[1]):
+            print(f"    - {count} file(s): {reason}")
+    if error_count:
+        print(f"  [Error Summary] {error_count} file(s) failed to parse")
+
+    # ── Sort docs ──
+    docs_meta.sort(key=lambda d: d.get("title", "").lower())
+    docs_texts.sort(key=lambda d: d.get("title", "").lower())
+
+    # ── Build index page ──
+    parsed_paths = {d["file"] for d in docs_meta if not d.get("skipped")}
+    file_tree_html = build_file_tree_split_html(folder_path, docs_texts) if include_skipped else ""
+    
+    # Build search index JSON
+    search_index_json = build_search_index_json(docs_texts)
+    
+    # Build index page (no file contents, just tree + search)
+    index_html = wrap_index_html(
+        docs_meta=docs_meta,
+        folder_name=folder_name,
+        folder_path=os.path.abspath(folder_path),
+        total_chars=total_chars,
+        generated_at=now,
+        file_tree_html=file_tree_html,
+        file_contents_html="",  # No embedded content in split mode
+        language=language,
+    )
+    
+    # Inject search index into the index page before closing </body>
+    search_script = (
+        f'<script>\n'
+        f'// ── Search index for split-file mode ──\n'
+        f'const SEARCH_INDEX = {search_index_json};\n'
+        f'\n'
+        f'(function() {{\n'
+        f'  const searchInput = document.getElementById("searchInput");\n'
+        f'  const treeList = document.getElementById("fileTree");\n'
+        f'  const treeLinks = treeList ? treeList.querySelectorAll("li") : [];\n'
+        f'\n'
+        f'  if (!searchInput) return;\n'
+        f'\n'
+        f'  function filterTree(query) {{\n'
+        f'    const q = query.toLowerCase().trim();\n'
+        f'    treeLinks.forEach(li => {{\n'
+        f'      if (!q) {{\n'
+        f'        li.style.display = "";\n'
+        f'        return;\n'
+        f'      }}\n'
+        f'      const text = (li.textContent || "").toLowerCase();\n'
+        f'      // Also search in the search index for this file\n'
+        f'      let matches = text.includes(q);\n'
+        f'      if (!matches) {{\n'
+        f'        const link = li.querySelector("a");\n'
+        f'        if (link) {{\n'
+        f'          const href = link.getAttribute("href") || "";\n'
+        f'          // Extract the filename from href to look up in search index\n'
+        f'          const docName = href.replace("docs/", "").replace(".html", "");\n'
+        f'          for (const item of SEARCH_INDEX) {{\n'
+        f'            const itemPath = item.path.replace(/[/\\\\]/g, "_");\n'
+        f'            if (itemPath === docName || itemPath + ".html" === docName + ".html") {{\n'
+        f'              const tagText = (item.tags || []).join(" ").toLowerCase();\n'
+        f'              const previewText = (item.preview || "").toLowerCase();\n'
+        f'              if (tagText.includes(q) || previewText.includes(q)) {{\n'
+        f'                matches = true;\n'
+        f'              }}\n'
+        f'              break;\n'
+        f'            }}\n'
+        f'          }}\n'
+        f'        }}\n'
+        f'      }}\n'
+        f'      li.style.display = matches ? "" : "none";\n'
+        f'    }});\n'
+        f'  }}\n'
+        f'\n'
+        f'  searchInput.addEventListener("input", function() {{\n'
+        f'    filterTree(this.value);\n'
+        f'  }});\n'
+        f'}})();\n'
+        f'</script>\n'
+    )
+    
+    # Insert search script before </body>
+    index_html = index_html.replace('</body>', search_script + '\n</body>')
+
+    # Use a fixed "index.html" as the entry filename for split mode,
+    # so that HTTP servers can find it by default and subpage back-links
+    # (href="../index.html") work correctly.
+    index_filename = "index.html"
+    index_path = os.path.join(output_dir, index_filename)
+    with open(index_path, 'w', encoding='utf-8') as f:
+        f.write(index_html)
+    logger.info("Split portal index: %s", index_path)
+    logger.info("Subpages directory: %s", docs_dir)
+
+    return {
+        "doc_count": parsed_count,
+        "total_chars": total_chars,
+        "skipped": skipped_count,
+        "errors": error_count,
+        "output_dir": output_dir,
+        "index_file": index_path,
+        "folder_name": folder_name,
+    }
+
+
+def _path_to_subpage_filename(rel_path: str) -> str:
+    """Convert a file's relative path into a safe HTML filename for the subpage.
+    
+    Examples:
+        src/parser/text_parser.py → src_parser_text_parser.html
+        README.md → README.html
+    """
+    safe = rel_path.replace('\\', '/').replace('/', '_')
+    safe = safe.replace(' ', '_').replace('#', '_').replace('?', '_')
+    safe = safe.replace('%', '_').replace('&', '_').replace('=', '_')
+    return safe + '.html'
+
+
+def _get_file_type(filename: str) -> str:
+    """Determine file type from extension."""
+    from src.constants import FILE_TYPE_MAP
+    ext = os.path.splitext(filename)[1].lower()
+    return FILE_TYPE_MAP.get(ext, ext.upper().lstrip('.').replace('.', '') if ext else 'Unknown')

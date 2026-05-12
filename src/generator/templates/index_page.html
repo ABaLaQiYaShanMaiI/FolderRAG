@@ -7,11 +7,12 @@
 <meta name="description" content="$meta_description_escaped">
 <meta name="keywords" content="$meta_keywords_escaped">
 <title>$escaped_folder — Knowledge Portal</title>
+<!-- The title above is English by default; the i18n JS below handles bilingual display -->
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    max-width: 1100px; margin: 0 auto; padding: 24px 20px;
+    max-width: 1400px; margin: 0 auto; padding: 24px 20px;
     background: #f8f9fa; color: #333;
   }
 
@@ -29,20 +30,10 @@
   .header-bar { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
   .header-info { flex: 1; }
 
-  /* AI Mode button */
+  /* AI Mode button — only language switcher remains */
   .ai-controls {
     display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap;
   }
-  .ai-btn {
-    padding: 8px 16px; font-size: 0.85em; font-weight: 600;
-    border: 1px solid rgba(255,255,255,0.4); border-radius: 6px;
-    background: transparent; color: rgba(255,255,255,0.9);
-    cursor: pointer; transition: all 0.2s; white-space: nowrap;
-  }
-  .ai-btn:hover { background: rgba(255,255,255,0.15); }
-  .ai-btn.primary { background: rgba(255,255,255,0.95); color: #1a73e8; border-color: white; }
-  .ai-btn.primary:hover { background: white; }
-  .ai-btn.secondary { background: rgba(255,255,255,0.1); }
 
   /* Language Switcher */
   .lang-switch {
@@ -120,7 +111,7 @@
   .cloud-tag:hover { background: #1a73e8; color: white; }
   .cloud-tag.active { background: #1a73e8; color: white; }
 
-  /* ========== File Blocks (new structure) ========== */
+  /* ========== File Blocks (always expanded) ========== */
   .file-blocks-section {
     background: white; border-radius: 10px; padding: 16px 20px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
@@ -132,78 +123,62 @@
   .file-blocks-title {
     font-size: 1em; font-weight: 600; color: #333;
   }
-  .file-blocks-actions {
-    display: flex; gap: 6px; flex-wrap: wrap;
-  }
-  .file-blocks-actions button {
-    padding: 5px 12px; font-size: 0.82em; font-weight: 500;
-    border: 1px solid #dadce0; border-radius: 6px;
-    background: white; color: #1a73e8; cursor: pointer;
-    transition: all 0.2s;
-  }
-  .file-blocks-actions button:hover { background: #e8f0fe; border-color: #1a73e8; }
-  .file-blocks-actions button.primary { background: #1a73e8; color: white; border-color: #1a73e8; }
-  .file-blocks-actions button.primary:hover { background: #1557b0; }
 
-  /* Individual doc block */
+  /* Individual doc block — always expanded */
   .doc-block {
     border: 1px solid #e8e8e8; border-radius: 8px;
-    margin-bottom: 6px; overflow: hidden;
-    transition: border-color 0.2s;
+    margin-bottom: 4px; overflow: hidden;
   }
-  .doc-block.expanded { border-color: #d0d8f0; }
   .doc-block.hidden { display: none; }
 
-  /* Header row — clickable to toggle */
+  /* Header row — now a simple title bar without toggle interaction */
   .doc-header {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 12px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
     background: #f8f9fa; user-select: none;
-    transition: background 0.15s;
     flex-wrap: wrap;
   }
-  .doc-header:hover { background: #e8f0fe; }
-  .doc-block.expanded .doc-header { background: #e8f0fe; }
 
-  .file-icon { font-size: 1.1em; flex-shrink: 0; }
+  .file-icon { font-size: 0.8em; flex-shrink: 0; }
   .file-name {
-    font-weight: 500; color: #1a73e8; font-size: 0.9em;
-    word-break: break-all; flex: 1; min-width: 120px;
+    font-weight: 500; color: #1a73e8; font-size: 0.75em;
+    word-break: break-all; flex: 1; min-width: 80px;
   }
   .file-size {
-    color: #888; font-size: 0.8em; white-space: nowrap; flex-shrink: 0;
+    color: #888; font-size: 0.65em; white-space: nowrap; flex-shrink: 0;
   }
   .file-chars {
-    color: #888; font-size: 0.8em; white-space: nowrap; flex-shrink: 0;
+    color: #888; font-size: 0.65em; white-space: nowrap; flex-shrink: 0;
   }
   .file-tags {
-    display: flex; gap: 3px; flex-wrap: wrap; flex: 0 1 auto;
+    display: flex; gap: 2px; flex-wrap: wrap; flex: 0 1 auto;
     min-width: 0;
   }
   .file-tag {
-    display: inline-block; padding: 1px 6px;
-    background: #e8f0fe; color: #1a73e8; border-radius: 8px;
-    font-size: 0.72em; white-space: nowrap;
+    display: inline-block; padding: 1px 4px;
+    background: #e8f0fe; color: #1a73e8; border-radius: 6px;
+    font-size: 0.6em; white-space: nowrap;
   }
 
-  /* Toggle button */
-  .toggle-btn {
-    padding: 2px 10px; font-size: 0.8em; border: 1px solid #dadce0;
+  /* Copy button */
+  .copy-file-btn {
+    padding: 2px 8px; font-size: 0.65em; border: 1px solid #dadce0;
     border-radius: 4px; background: white; color: #555;
-    cursor: pointer; flex-shrink: 0; transition: transform 0.2s;
+    cursor: pointer; flex-shrink: 0; transition: all 0.2s;
+    white-space: nowrap;
   }
-  .doc-block.expanded .toggle-btn { transform: rotate(90deg); }
-  .toggle-btn:hover { background: #d2e3fc; }
+  .copy-file-btn:hover { background: #d2e3fc; border-color: #1a73e8; color: #1a73e8; }
+  .copy-file-btn.copied { background: #34a853; color: white; border-color: #34a853; }
 
-  /* Content area (hidden by default) */
+  /* Content area — always visible with extremely small font for AI density */
   .doc-content {
     border-top: 1px solid #e8e8e8;
   }
   .doc-content pre {
-    margin: 0; padding: 16px; overflow-x: auto;
+    margin: 0; padding: 4px 8px;
     font-family: 'Consolas', 'Courier New', 'SF Mono', monospace;
-    font-size: 0.85em; line-height: 1.6;
-    white-space: pre-wrap; word-break: break-word;
+    font-size: 3px; line-height: 1.2;
+    white-space: pre-wrap; word-break: break-all; overflow-x: hidden;
     background: #fafbfc; color: #333;
   }
 
@@ -235,21 +210,15 @@
     .tree-file.skipped a { color: #666; }
     .file-blocks-section { background: #16213e; }
     .file-blocks-title { color: #ddd; }
-    .file-blocks-actions button { background: #2a2a4e; border-color: #444; color: #64b5f6; }
-    .file-blocks-actions button:hover { background: #3a3a5e; }
-    .file-blocks-actions button.primary { background: #1565c0; border-color: #1565c0; color: white; }
-    .file-blocks-actions button.primary:hover { background: #1976d2; }
     .doc-block { border-color: #333; }
-    .doc-block.expanded { border-color: #2a3a5a; }
     .doc-header { background: #1a1a2e; }
-    .doc-header:hover { background: #2a2a4e; }
-    .doc-block.expanded .doc-header { background: #2a2a4e; }
     .file-name { color: #64b5f6; }
     .file-size { color: #888; }
     .file-chars { color: #888; }
     .file-tag { background: #2a2a4e; color: #64b5f6; }
-    .toggle-btn { background: #2a2a4e; border-color: #444; color: #aaa; }
-    .toggle-btn:hover { background: #3a3a5e; }
+    .copy-file-btn { background: #2a2a4e; border-color: #444; color: #aaa; }
+    .copy-file-btn:hover { background: #3a3a5e; }
+    .copy-file-btn.copied { background: #2e7d32; border-color: #2e7d32; color: white; }
     .doc-content { border-top-color: #333; }
     .doc-content pre { background: #0d1117; color: #e0e0e0; }
     .footer { border-top-color: #333; color: #666; }
@@ -258,11 +227,9 @@
   @media print {
     body { background: white; color: black; padding: 0.2in; }
     .portal-header { background: #1a73e8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .search-section, .tag-cloud, .file-tree-section, .file-blocks-actions { display: none; }
+    .search-section, .tag-cloud, .file-tree-section { display: none; }
     .doc-block { break-inside: avoid; }
-    .doc-content { display: block !important; }
-    .doc-header { cursor: default; }
-    .toggle-btn { display: none; }
+    .copy-file-btn { display: none; }
   }
 </style>
 </head>
@@ -274,15 +241,13 @@
       <div class="header-top">
         <h1>📁 $escaped_folder</h1>
         <div class="ai-controls">
-          <button class="ai-btn primary" onclick="expandAll()">🤖 Expand All (AI Mode)</button>
-          <button class="ai-btn secondary" onclick="collapseAll()">📁 Collapse All</button>
           <span class="lang-switch">
             <button class="lang-btn" data-lang="en" onclick="switchLang('en')">EN</button>
             <button class="lang-btn" data-lang="zh" onclick="switchLang('zh')">中文</button>
           </span>
         </div>
       </div>
-      <div class="sub" data-i18n="subtitle">Knowledge Portal — all file contents in one page, collapsible for AI reading</div>
+      <div class="sub" data-i18n="subtitle">Knowledge Portal — all file contents in one page, expanded for AI reading</div>
       <div class="stats">
         <span>📄 <span data-i18n="docs">Docs</span>: $doc_count</span>
         <span>📝 <span data-i18n="chars">Chars</span>: $total_chars</span>
@@ -315,15 +280,11 @@
   </div>
 </div>
 
-<!-- Right: File blocks (replaces old doc-grid) -->
+<!-- Right: File blocks (always expanded) -->
 <div class="right-panel">
   <div class="file-blocks-section">
     <div class="file-blocks-header">
       <span class="file-blocks-title">📄 <span data-i18n="file_contents">File Contents</span></span>
-      <div class="file-blocks-actions">
-        <button class="primary" onclick="expandAll()">🤖 <span data-i18n="expand_all">Expand All (AI Mode)</span></button>
-        <button onclick="collapseAll()">📁 <span data-i18n="collapse_all">Collapse All</span></button>
-      </div>
     </div>
     <div id="fileBlocksList">
       $file_contents_html
@@ -345,7 +306,7 @@
 // ── i18n strings ──
 const i18n = {
   en: {
-    subtitle: 'Knowledge Portal — all file contents in one page, collapsible for AI reading',
+    subtitle: 'Knowledge Portal — all file contents in one page, expanded for AI reading',
     docs: 'Docs',
     chars: 'Chars',
     size: 'Size',
@@ -353,14 +314,14 @@ const i18n = {
     folder_structure: 'Folder Structure',
     keywords: 'Keywords',
     file_contents: 'File Contents',
-    expand_all: 'Expand All (AI Mode)',
-    collapse_all: 'Collapse All',
     no_match: 'No matching documents found',
     try_keywords: 'Try different keywords',
     generated_by: 'Generated by',
+    copy_file: 'Copy this file',
+    copy_success: '✅ Copied!',
   },
   zh: {
-    subtitle: '知识门户 — 所有文件内容集中在一个页面，可折叠供 AI 读取',
+    subtitle: '知识门户 — 所有文件内容集中在一个页面，已展开供 AI 读取',
     docs: '文档',
     chars: '字符',
     size: '大小',
@@ -368,11 +329,11 @@ const i18n = {
     folder_structure: '文件夹结构',
     keywords: '关键词',
     file_contents: '文件内容',
-    expand_all: '展开全部（AI 模式）',
-    collapse_all: '全部折叠',
     no_match: '没有找到匹配的文档',
     try_keywords: '试试不同的关键词',
     generated_by: '由',
+    copy_file: '复制此文件',
+    copy_success: '✅ 已复制！',
   }
 };
 
@@ -389,8 +350,23 @@ function applyLang(lang) {
   document.querySelectorAll('.lang-btn').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
   });
+  // Update copy button titles
+  document.querySelectorAll('.copy-file-btn').forEach(btn => {
+    btn.title = t.copy_file || 'Copy this file';
+  });
   document.documentElement.lang = lang;
   document.documentElement.setAttribute('data-lang', lang);
+  // Update split-mode hint if present
+  const title = document.querySelector('.file-blocks-title');
+  if (title && title.innerHTML.includes('Click file names')) {
+    title.innerHTML = lang === 'zh'
+      ? '💡 点击文件树中的文件名可在新标签页中打开子页面'
+      : '💡 Click file names in the tree to open subpages in new tabs';
+  } else if (title && title.innerHTML.includes('点击文件树')) {
+    title.innerHTML = lang === 'zh'
+      ? '💡 点击文件树中的文件名可在新标签页中打开子页面'
+      : '💡 Click file names in the tree to open subpages in new tabs';
+  }
   try { localStorage.setItem('folderknowledge_lang', lang); } catch(e) {}
 }
 
@@ -407,64 +383,62 @@ function switchLang(lang) {
   applyLang(lang);
 })();
 
-// ── Toggle single doc block ──
-function toggleDocBlock(headerEl) {
-  const block = headerEl.closest('.doc-block');
-  if (!block) return;
-  const content = block.querySelector('.doc-content');
-  const btn = block.querySelector('.toggle-btn');
-  const isOpen = block.classList.contains('expanded');
+// ── Copy file content ──
+function copyFileContent(btn) {
+  const index = btn.getAttribute('data-file-index');
+  const pre = document.getElementById('file-content-' + index);
+  if (!pre) return;
   
-  if (isOpen) {
-    block.classList.remove('expanded');
-    content.style.display = 'none';
-    if (btn) btn.textContent = '▶';
+  const text = pre.textContent || '';
+  
+  // Try modern Clipboard API first
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showCopied(btn);
+    }).catch(() => {
+      fallbackCopy(text, btn);
+    });
   } else {
-    block.classList.add('expanded');
-    content.style.display = '';
-    if (btn) btn.textContent = '▼';
+    fallbackCopy(text, btn);
   }
 }
 
-// ── Expand / Collapse All ──
-function expandAll() {
-  document.querySelectorAll('.doc-block').forEach(block => {
-    const content = block.querySelector('.doc-content');
-    const btn = block.querySelector('.toggle-btn');
-    block.classList.add('expanded');
-    if (content) content.style.display = '';
-    if (btn) btn.textContent = '▼';
-  });
+function fallbackCopy(text, btn) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    showCopied(btn);
+  } catch (e) {
+    // Copy failed silently
+  }
+  document.body.removeChild(textarea);
 }
 
-function collapseAll() {
-  document.querySelectorAll('.doc-block').forEach(block => {
-    const content = block.querySelector('.doc-content');
-    const btn = block.querySelector('.toggle-btn');
-    block.classList.remove('expanded');
-    if (content) content.style.display = 'none';
-    if (btn) btn.textContent = '▶';
-  });
+function showCopied(btn) {
+  const lang = document.documentElement.getAttribute('data-lang') || 'en';
+  const t = i18n[lang] || i18n.en;
+  const originalText = btn.textContent;
+  btn.textContent = t.copy_success || '✅';
+  btn.classList.add('copied');
+  setTimeout(() => {
+    btn.textContent = originalText;
+    btn.classList.remove('copied');
+  }, 2000);
 }
 
 // ── Jump to file content from tree ──
 function jumpToFile(encoded) {
-  // Filename is always pre-encoded as Base64 by the tree builder.
-  // Decode it for the alert message, but query by Base64 data attribute.
   const block = document.querySelector(`.doc-block[data-filename-b64="${encoded}"]`);
   if (block) {
-    // Expand this block if not already
-    const content = block.querySelector('.doc-content');
-    const btn = block.querySelector('.toggle-btn');
-    if (!block.classList.contains('expanded')) {
-      block.classList.add('expanded');
-      if (content) content.style.display = '';
-      if (btn) btn.textContent = '▼';
-    }
     block.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else {
-    // File was skipped or could not be parsed - show helpful message
-    // Decode the Base64 filename for the message
     let decoded = encoded;
     try { decoded = atob(encoded); } catch(e) { /* use encoded as-is */ }
     alert('This file could not be parsed or was skipped.\n\nFile: ' + decoded);
@@ -479,21 +453,33 @@ function jumpToFile(encoded) {
   const blocks = blocksSection.querySelectorAll('.doc-block');
   const cloudTags = document.querySelectorAll('.cloud-tag');
   const treeLinks = document.querySelectorAll('.tree-file a');
+  const fileBlocksTitle = document.querySelector('.file-blocks-title');
 
   let searchTimeout = null;
+
+  // ── Split-file mode detection ──
+  // In split-file mode, file_contents_html is empty, so there are no .doc-block elements.
+  // We show a hint instead of "No matching documents found".
+  const isSplitMode = blocks.length === 0;
+  if (isSplitMode) {
+    const lang = document.documentElement.getAttribute('data-lang') || 'en';
+    if (fileBlocksTitle) {
+      fileBlocksTitle.innerHTML = lang === 'zh'
+        ? '💡 点击文件树中的文件名可在新标签页中打开子页面'
+        : '💡 Click file names in the tree to open subpages in new tabs';
+    }
+    emptyState.classList.remove('visible');
+    return; // Skip .doc-block search logic entirely in split mode
+  }
 
   function filterBlocks(query) {
     const q = query.toLowerCase().trim();
     let visibleCount = 0;
     
     blocks.forEach(block => {
-      // Use pre-computed data-index attribute for fast filtering (title + tags)
       const preIndex = (block.getAttribute('data-index') || '').toLowerCase();
-      // Also search content text for expanded blocks (only read DOM if needed)
       let match = !q || preIndex.includes(q);
       if (!match && q) {
-        // Fall back to content text search only for expanded blocks to avoid DOM reads
-        // This is a performance optimization: only read DOM when pre-index doesn't match
         const bodyText = (block.querySelector('.doc-content')?.textContent || '').toLowerCase();
         match = bodyText.includes(q);
       }
@@ -504,7 +490,6 @@ function jumpToFile(encoded) {
     
     emptyState.classList.toggle('visible', visibleCount === 0);
 
-    // Highlight matching tree items
     treeLinks.forEach(a => {
       const parent = a.closest('.tree-file');
       if (!parent) return;
@@ -538,31 +523,6 @@ function jumpToFile(encoded) {
   });
 })();
 </script>
-
-<!-- ======================================================================== 
-     AI-READABLE TEXT EXTRACT (hidden from human viewers)
-     
-     This <section> contains all file contents in plain text format, placed 
-     with 'position: absolute; left: -9999px' so it is invisible to human 
-     users but still accessible to AI text extractors (Edge Copilot, ChatGPT 
-     Web, etc.). These extractors typically skip display:none nodes but DO 
-     read nodes that are merely positioned off-screen.
-     
-     The block uses:
-       - position: absolute; left: -9999px → visually hidden, DOM-present
-       - aria-hidden="true" → screen readers skip it
-       - <pre> tag → whitespace/line breaks preserved for AI readers
-     
-     Why not display: none? Because that is what the collapsible blocks use,
-     and it is exactly why AI cannot read collapsed content now. Using the 
-     same approach for this block would defeat the purpose.
-     
-     Why not remove it? This ensures AI can ingest the full knowledge base 
-     without needing to expand every collapsed block.
-     ======================================================================== -->
-<section aria-hidden="true" style="position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; white-space: pre-wrap;">
-$ai_raw_text_html
-</section>
 
 </body>
 </html>
