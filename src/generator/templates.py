@@ -301,31 +301,33 @@ def build_subpage_html(
 
 
 def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
-    """Build a file tree where each file item links to its subpage.
+    """Build a collapsible file tree where each file links to its subpage.
     
-    This is similar to build_file_tree_html in portal.py, but instead of
-    using JavaScript jumpToFile, it generates direct <a href> links to
-    subpages in the docs/ directory, opening in a new tab.
+    Features:
+    - Folders are clickable to collapse/expand their children
+    - Toggle icons (▶/▼) show current state
+    - "Expand All / Collapse All" buttons at the top
+    - Each file links to its subpage in docs/ directory
     
     Args:
         folder_path: Root folder to scan
         parsed_docs: List of parsed doc dicts with 'title' (rel_path) key
     
     Returns:
-        HTML string for the file tree
+        HTML string for the collapsible file tree
     """
     from src.constants import FILTER_DIRS as _FILTER_DIRS
     from src.constants import should_filter_file as _should_filter_file
     
     parsed_paths = {d.get("title", "") for d in parsed_docs}
-    lines = []
     
     def walk(dirpath, prefix=""):
+        """Recursively build tree items. Returns list of HTML lines."""
         items = []
         try:
             names = sorted(os.listdir(dirpath), key=str.lower)
         except PermissionError:
-            return
+            return []
         
         root_for_rel = folder_path
         for name in names:
@@ -345,19 +347,29 @@ def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
         files = [(n, f, r) for t, n, f, r in items if t == 'file']
         all_items = dirs + files
         
+        result = []
         for idx, (name, full_path, rel_path) in enumerate(all_items):
             is_last = (idx == len(all_items) - 1)
             connector = '└──' if is_last else '├──'
             child_prefix = prefix + ('    ' if is_last else '│   ')
             
             if os.path.isdir(full_path):
-                lines.append(
-                    f'<li class="tree-folder">'
+                # Build children recursively
+                children = walk(full_path, child_prefix)
+                children_html = (
+                    f'<ul class="folder-children">\n'
+                    f'  {chr(10).join(children)}'
+                    f'</ul>'
+                ) if children else ''
+                
+                result.append(
+                    f'<li class="tree-folder" onclick="toggleFolder(this)">'
                     f'<span class="tree-prefix">{prefix}{connector}</span>'
+                    f'<span class="folder-toggle-icon">▼</span>'
                     f'<span class="tree-folder-name">📁 {name}</span>'
+                    f'{children_html}'
                     f'</li>'
                 )
-                walk(full_path, child_prefix)
             else:
                 size = os.path.getsize(full_path)
                 size_hr = human_readable_size(size)
@@ -366,7 +378,7 @@ def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
                 subpage_name = _path_to_subpage_filename(rel_path)
                 
                 if is_parsed:
-                    link_html = f'<a href="docs/{subpage_name}" target="_blank">📄 {name}</a>'
+                    link_html = f'<a href="docs/{subpage_name}" target="_blank" onclick="event.stopPropagation()">📄 {name}</a>'
                 else:
                     link_html = f'<span class="unparsed">⏭️ {name}</span>'
                 
@@ -374,15 +386,17 @@ def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
                 if not is_parsed:
                     css_class += ' skipped'
                 
-                lines.append(
+                result.append(
                     f'<li class="{css_class}">'
                     f'<span class="tree-prefix">{prefix}{connector}</span>'
                     f'{link_html}'
                     f'<span class="tree-size"> {size_hr}</span>'
                     f'</li>'
                 )
+        
+        return result
     
-    walk(folder_path)
+    lines = walk(folder_path)
     return '\n'.join(lines)
 
 

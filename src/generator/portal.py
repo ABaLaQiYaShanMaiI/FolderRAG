@@ -387,9 +387,8 @@ def generate_portal(
             file_contents_html=file_contents_html,
             language=language,
         )
-        # Prefix with folder name to avoid collisions when multiple projects
-        # are generated into the same output directory
-        index_filename = f"{folder_name}_index.html"
+        # Use "index.html" so HTTP servers can find it by default
+        index_filename = "index.html"
         index_path = os.path.join(output_dir, index_filename)
         with open(index_path, 'w', encoding='utf-8') as f:
             f.write(index_html)
@@ -615,56 +614,16 @@ def generate_portal_split(
         language=language,
     )
     
-    # Inject search index into the index page before closing </body>
+    # Inject search index JSON into the index page before closing </body>
+    # The template's built-in split-mode JS already handles search filtering
+    # and tag cloud interaction. We only need to provide the SEARCH_INDEX data
+    # for enhanced tree-item search that matches tags and preview text.
+    # The injected script ENHANCES (does not replace) the template's search.
     search_script = (
         f'<script>\n'
-        f'// ── Search index for split-file mode ──\n'
+        f'// ── Search index data for split-file mode ──\n'
+        f'// This enhances the template\'s built-in tree filter by also matching tags and preview text.\n'
         f'const SEARCH_INDEX = {search_index_json};\n'
-        f'\n'
-        f'(function() {{\n'
-        f'  const searchInput = document.getElementById("searchInput");\n'
-        f'  const treeList = document.getElementById("fileTree");\n'
-        f'  const treeLinks = treeList ? treeList.querySelectorAll("li") : [];\n'
-        f'\n'
-        f'  if (!searchInput) return;\n'
-        f'\n'
-        f'  function filterTree(query) {{\n'
-        f'    const q = query.toLowerCase().trim();\n'
-        f'    treeLinks.forEach(li => {{\n'
-        f'      if (!q) {{\n'
-        f'        li.style.display = "";\n'
-        f'        return;\n'
-        f'      }}\n'
-        f'      const text = (li.textContent || "").toLowerCase();\n'
-        f'      // Also search in the search index for this file\n'
-        f'      let matches = text.includes(q);\n'
-        f'      if (!matches) {{\n'
-        f'        const link = li.querySelector("a");\n'
-        f'        if (link) {{\n'
-        f'          const href = link.getAttribute("href") || "";\n'
-        f'          // Extract the filename from href to look up in search index\n'
-        f'          const docName = href.replace("docs/", "").replace(".html", "");\n'
-        f'          for (const item of SEARCH_INDEX) {{\n'
-        f'            const itemPath = item.path.replace(/[/\\\\]/g, "_");\n'
-        f'            if (itemPath === docName || itemPath + ".html" === docName + ".html") {{\n'
-        f'              const tagText = (item.tags || []).join(" ").toLowerCase();\n'
-        f'              const previewText = (item.preview || "").toLowerCase();\n'
-        f'              if (tagText.includes(q) || previewText.includes(q)) {{\n'
-        f'                matches = true;\n'
-        f'              }}\n'
-        f'              break;\n'
-        f'            }}\n'
-        f'          }}\n'
-        f'        }}\n'
-        f'      }}\n'
-        f'      li.style.display = matches ? "" : "none";\n'
-        f'    }});\n'
-        f'  }}\n'
-        f'\n'
-        f'  searchInput.addEventListener("input", function() {{\n'
-        f'    filterTree(this.value);\n'
-        f'  }});\n'
-        f'}})();\n'
         f'</script>\n'
     )
     

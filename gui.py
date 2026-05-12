@@ -15,7 +15,7 @@ from functools import partial
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 try:
-    from src.generator.portal import generate_portal
+    from src.generator.portal import generate_portal, generate_portal_split
     HAS_PORTAL = True
 except ImportError:
     HAS_PORTAL = False
@@ -453,17 +453,72 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                 self.load_folder(folder)
 
     def build_file_list(self):
-        flist_f = ttk.Frame(self.main)
-        flist_f.pack(fill=tk.BOTH, expand=True, pady=(0, 6))
+        # Card-style frame with background color and border for the file tree
+        flist_card = tk.Frame(self.main, bg=self.COLORS['card'],
+                              highlightbackground=self.COLORS['border'],
+                              highlightthickness=1, padx=10, pady=8)
+        flist_card.pack(fill=tk.BOTH, expand=True, pady=(0, 6))
 
-        hdr_f = ttk.Frame(flist_f)
+        hdr_f = tk.Frame(flist_card, bg=self.COLORS['card'])
         hdr_f.pack(fill=tk.X, pady=(0, 3))
-        ttk.Label(hdr_f, text=self.tr('file_list'), style='Heading.TLabel').pack(side=tk.LEFT)
-        self.stats_lbl = ttk.Label(hdr_f, text=self.tr('no_folder'),
-                                   style='Subtitle.TLabel')
+        tk.Label(hdr_f, text=self.tr('file_list'), font=('Segoe UI', 11, 'bold'),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
+        self.stats_lbl = tk.Label(hdr_f, text=self.tr('no_folder'),
+                                  font=('Segoe UI', 9),
+                                  bg=self.COLORS['card'], fg=self.COLORS['text_secondary'])
         self.stats_lbl.pack(side=tk.RIGHT)
 
-        tree_f = ttk.Frame(flist_f)
+        # ── Search bar for code content search ──
+        search_row = tk.Frame(flist_card, bg=self.COLORS['card'])
+        search_row.pack(fill=tk.X, pady=(0, 3))
+
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add('write', lambda *a: self._filter_file_tree())
+        search_entry = ttk.Entry(search_row, textvariable=self.search_var,
+                                 font=('Segoe UI', 10))
+        search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
+        search_entry.bind('<KeyRelease>', lambda e: self._filter_file_tree())
+
+        search_clear_btn = tk.Button(search_row, text='✕', font=('Segoe UI', 9),
+                                     bg=self.COLORS['text_secondary'], fg='white',
+                                     relief='flat', width=3, cursor='hand2',
+                                     command=lambda: self.search_var.set(''))
+        search_clear_btn.pack(side=tk.LEFT, padx=1)
+        search_clear_btn.bind('<Enter>', lambda e: search_clear_btn.configure(bg='#999'))
+        search_clear_btn.bind('<Leave>', lambda e: search_clear_btn.configure(bg=self.COLORS['text_secondary']))
+
+        # Search mode toggle: file name only / full code content
+        self.search_mode_var = tk.StringVar(value='name')
+        name_rb = tk.Radiobutton(search_row, text='Name', variable=self.search_mode_var,
+                                 value='name', font=('Segoe UI', 8),
+                                 bg=self.COLORS['card'], selectcolor=self.COLORS['card'],
+                                 command=self._filter_file_tree)
+        name_rb.pack(side=tk.LEFT, padx=(2, 0))
+        code_rb = tk.Radiobutton(search_row, text='Code', variable=self.search_mode_var,
+                                 value='code', font=('Segoe UI', 8),
+                                 bg=self.COLORS['card'], selectcolor=self.COLORS['card'],
+                                 command=self._filter_file_tree)
+        code_rb.pack(side=tk.LEFT, padx=(0, 2))
+
+        # ── Spacer pushes hints to the right ──
+        spacer = tk.Frame(search_row, bg=self.COLORS['card'])
+        spacer.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Search mode hint on the right side (文件结构右边)
+        self.search_hint_lbl = tk.Label(search_row, text='', font=('Segoe UI', 7),
+                                        bg=self.COLORS['card'], fg=self.COLORS['text_secondary'])
+        self.search_hint_lbl.pack(side=tk.RIGHT, padx=(0, 6))
+
+        # Keyboard shortcut hint (最右边)
+        if self._lang == 'zh':
+            shortcut_text = '双击打开  |  Esc退出'
+        else:
+            shortcut_text = 'Double-click open  |  Esc quit'
+        shortcut_lbl = tk.Label(search_row, text=shortcut_text, font=('Segoe UI', 7),
+                                bg=self.COLORS['card'], fg=self.COLORS['text_secondary'])
+        shortcut_lbl.pack(side=tk.RIGHT, padx=(0, 2))
+
+        tree_f = tk.Frame(flist_card, bg=self.COLORS['card'])
         tree_f.pack(fill=tk.BOTH, expand=True)
 
         vs = ttk.Scrollbar(tree_f, orient=tk.VERTICAL)
@@ -491,6 +546,14 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.tree.tag_configure('skip', foreground=self.COLORS['text_secondary'])
         self.tree.tag_configure('even', background='#fafafa')
         self.tree.tag_configure('odd', background='#ffffff')
+        self.tree.tag_configure('matched', background='#fff3cd')  # highlight matches in yellow
+
+        # Double-click to open file in system editor
+        self.tree.bind('<Double-1>', self._on_tree_double_click)
+        # Also bind Enter key on selection
+        self.tree.bind('<Return>', self._on_tree_double_click)
+        # Update hint when mode changes
+        self._update_search_hint()
 
     def build_settings(self):
         self.set_f = tk.Frame(self.main, bg=self.COLORS['card'],
@@ -861,7 +924,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         if is_portal:
             self.portal_f.pack(fill=tk.X)
             self.gen_btn.config(text=self.tr('gen_portal_btn'))
-            self.status_var.set("Portal: single page with collapsible files + file tree" if self._lang == 'en' else "门户模式：单一页面，文件可折叠展开，带文件树导航")
+            self.status_var.set("Portal: split mode — each file gets its own HTML subpage, index page with tree + search" if self._lang == 'en' else "门户模式：拆分模式 — 每个文件独立子页面，索引页显示文件树和搜索")
         elif is_chunked:
             self.chunked_f.pack(fill=tk.X)
             self.gen_btn.config(text='Generate Split TXT')
@@ -954,7 +1017,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
 
             def task():
                 try:
-                    r = generate_portal(
+                    r = generate_portal_split(
                         folder_path=self.current_folder,
                         output_dir=out_dir,
                         include_skipped=skip,
@@ -1089,6 +1152,131 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                     self._open_folder(idx)
         else:
             messagebox.showinfo("Done", msg + "No pages generated")
+
+    # ── File tree search and open ──
+
+    def _update_search_hint(self):
+        """Update the search mode hint label."""
+        mode = self.search_mode_var.get()
+        if self._lang == 'zh':
+            hint = '搜索文件名' if mode == 'name' else '搜索代码内容'
+        else:
+            hint = 'Search file names' if mode == 'name' else 'Search code content'
+        self.search_hint_lbl.config(text=hint)
+
+    def _build_content_search_index(self):
+        """Build a dict mapping file index -> lowercase content for code searching."""
+        idx = {}
+        for i, f in enumerate(self.file_list):
+            if not f['supported']:
+                continue
+            try:
+                from src.parser.dispatcher import parse_file
+                result = parse_file(f['path'])
+                if result:
+                    text = (result.get("text") or "").strip()
+                    if text:
+                        idx[i] = text.lower()
+            except Exception:
+                pass
+        return idx
+
+    _content_search_index = {}  # Class-level cache for content search
+
+    def _filter_file_tree(self):
+        """Filter the file tree based on search query."""
+        query = self.search_var.get().strip().lower()
+        mode = self.search_mode_var.get()
+
+        # No items in tree
+        if not self.tree.get_children():
+            return
+
+        if not query:
+            # Show all items
+            total = 0
+            for item in self.tree.get_children():
+                self.tree.item(item, tags=())  # Remove matched tag
+                total += 1
+            self.footer_var.set(f"{total} {self.tr('files')}")
+            self.stats_lbl.config(text=f"{len(self.file_list)} {self.tr('files')} | {sum(1 for f in self.file_list if f['supported'])} {self.tr('supported')} | {human_readable_size(self.total_size)}")
+            return
+
+        if mode == 'code' and not self._content_search_index:
+            # Build content search index in background
+            self.status_var.set("Building content search index..." if self._lang == 'en' else "正在构建内容搜索索引...")
+            self.root.update_idletasks()
+            self._content_search_index = self._build_content_search_index()
+            self.status_var.set("Search ready" if self._lang == 'en' else "搜索就绪")
+
+        matched_count = 0
+        for i, item in enumerate(self.tree.get_children()):
+            values = self.tree.item(item, 'values')
+            if not values:
+                continue
+            file_name = values[0] if values else ''
+            # Remove icon prefix for matching
+            clean_name = file_name.replace('\U0001f4c4', '').replace('\u23ed\ufe0f', '').strip()
+
+            if mode == 'name':
+                # Match file name only
+                match = query in clean_name.lower()
+            else:
+                # Match file name OR content
+                match = query in clean_name.lower()
+                if not match and i in self._content_search_index:
+                    match = query in self._content_search_index[i]
+
+            if match:
+                self.tree.item(item, tags=('matched',))
+                self.tree.move(item, '', len(self.tree.get_children()) - len(self.tree.selection()))  # keep order
+                matched_count += 1
+            else:
+                self.tree.item(item, tags=())
+
+        # Update footer with match count
+        self.footer_var.set(f"{matched_count}/{len(self.tree.get_children())} matched")
+        if self._lang == 'zh':
+            st = f"找到 {matched_count} 个匹配文件"
+        else:
+            st = f"Found {matched_count} matching files"
+        self.status_var.set(st)
+
+    def _on_tree_double_click(self, event):
+        """Handle double-click or Enter on a tree item: open file in system editor."""
+        selection = self.tree.selection()
+        if not selection:
+            return
+        item = selection[0]
+        values = self.tree.item(item, 'values')
+        if not values:
+            return
+        file_name = values[0] if values else ''
+        # Remove icon prefix
+        clean_name = file_name.replace('\U0001f4c4', '').replace('\u23ed\ufe0f', '').strip()
+
+        # Find the matching file in file_list
+        for f in self.file_list:
+            if f['rel_path'] == clean_name:
+                full_path = f['path']
+                if os.path.isfile(full_path):
+                    try:
+                        if sys.platform == 'win32':
+                            os.startfile(full_path)
+                        elif sys.platform == 'darwin':
+                            import subprocess
+                            subprocess.run(['open', full_path])
+                        else:
+                            import subprocess
+                            subprocess.run(['xdg-open', full_path])
+                        return
+                    except Exception as e:
+                        logger.warning("Failed to open file: %s", e)
+                        messagebox.showerror("Error", f"Failed to open: {clean_name}\n{e}")
+                        return
+
+        # File not found in list (shouldn't happen)
+        messagebox.showerror("Error", f"File not found: {clean_name}")
 
     def _gen_err(self, msg):
         self.generating = False

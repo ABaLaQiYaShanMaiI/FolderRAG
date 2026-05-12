@@ -9,14 +9,18 @@ Usage:
     # 分片模式：按固定大小自动拆分为多个文件，避免溢出 LLM 上下文
     python generate.py <folder_path> --split-chunks -o <output_dir/> [--chunk-size 500000]
 
-    # 门户模式：生成可搜索的单页知识门户
+    # 门户模式：默认生成拆分式知识门户（每个文件独立子页面，主页显示文件树+搜索）
     python generate.py <folder_path> --portal -o <output_dir/>
+
+    # 门户模式（单页，不推荐）：将所有内容嵌入一个 HTML
+    python generate.py <folder_path> --portal --single-page -o <output_dir/>
 
 Scans all files in a folder, parses documents (PDF, DOCX, PPTX, XLSX, TXT, etc.),
 and generates:
   - TXT 模式：一个纯文本文件（完整内容，无截断）
   - 分片模式：多个 part_NNN.txt 文件，每个 ≤ chunk-size 字符，并附带索引 HTML
-  - 门户模式：一个可搜索、可折叠的单页知识门户，适合 AI 完整消费
+  - 门户模式（默认）：拆分式知识门户，每个文件独立 HTML 子页面，主页为文件树+搜索
+  - 门户模式（--single-page）：所有文件内容嵌入一个页面（不推荐）
 """
 
 import os
@@ -101,12 +105,17 @@ def main():
     parser.add_argument(
         "--portal",
         action="store_true",
-        help="[门户模式] 生成可搜索的单页知识门户（推荐 AI 使用）",
+        help="[门户模式] 生成可搜索的知识门户（默认拆分模式：每个文件独立子页面）",
+    )
+    parser.add_argument(
+        "--single-page",
+        action="store_true",
+        help="[门户模式] 单页模式：所有文件内容嵌入一个页面（不推荐，内容过多时可能卡顿）",
     )
     parser.add_argument(
         "--split-files",
         action="store_true",
-        help="[门户模式] 拆分模式：每个文件生成独立子页面，主页面仅提供目录树和搜索",
+        help="[已废弃] 请直接使用 --portal，拆分模式已是默认行为",
     )
     parser.add_argument(
         "--no-skipped",
@@ -230,8 +239,8 @@ def main():
         if max_cpf == 0:
             max_cpf = None
         
-        if args.split_files:
-            result = generate_portal_split(
+        if args.single_page:
+            result = generate_portal(
                 folder_path=args.folder,
                 output_dir=output_dir,
                 include_skipped=not args.no_skipped,
@@ -239,7 +248,7 @@ def main():
                 language=args.lang,
             )
         else:
-            result = generate_portal(
+            result = generate_portal_split(
                 folder_path=args.folder,
                 output_dir=output_dir,
                 include_skipped=not args.no_skipped,
@@ -260,17 +269,17 @@ def main():
                 print("   [错误文件] %d" % result['errors'])
             print()
             print("[使用提示]")
-            if args.split_files:
+            if args.single_page:
+                print("   1. 双击 index.html 在浏览器中打开")
+                print("   2. 搜索关键词找到目标文档")
+                print("   3. 点击文档标题在新标签页打开")
+                print("   4. 按 Ctrl+Shift+. 唤醒 Edge Copilot 提问")
+            else:
                 print("   1. 双击 index.html 在浏览器中打开（拆分模式）")
                 print("   2. 主页面显示文件树和搜索框，可搜索文件名和关键词")
                 print("   3. 点击文件名在新标签页打开对应子页面")
                 print("   4. 可一次性按 Ctrl+点击 打开多个标签页")
                 print("   5. 唤醒 Edge Copilot 自动读取所有打开标签页的内容")
-            else:
-                print("   1. 双击 index.html 在浏览器中打开")
-                print("   2. 搜索关键词找到目标文档")
-                print("   3. 点击文档标题在新标签页打开")
-                print("   4. 按 Ctrl+Shift+. 唤醒 Edge Copilot 提问")
         else:
             print("警告：未生成任何文档（文件夹为空或所有文件都无法解析）", file=sys.stderr)
             sys.exit(1)
