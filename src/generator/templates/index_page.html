@@ -449,16 +449,16 @@ function collapseAll() {
 
 // ── Jump to file content from tree ──
 function jumpToFile(filename) {
-  // Use CSS.escape for safe attribute matching, with a polyfill fallback
-  function cssEscape(value) {
-    if (typeof CSS !== 'undefined' && CSS.escape) {
-      return CSS.escape(value);
-    }
-    // Polyfill: escape all special CSS selector characters
-    return String(value).replace(/([!"#$%&'()*+,.\/:;<=>?@[\]^`{|}~\\])/g, '\\$1');
+  // The filename may be passed as raw text (from tree links) or already
+  // Base64-encoded (from portal.py). If it looks like valid Base64, use it
+  // directly; otherwise encode it to match data-filename-b64.
+  function isBase64(str) {
+    try { return btoa(atob(str)) === str; } catch(e) { return false; }
   }
-  const escaped = cssEscape(filename);
-  const block = document.querySelector(`.doc-block[data-filename="${escaped}"]`);
+  const encoded = isBase64(filename) ? filename : (function() {
+    try { return btoa(unescape(encodeURIComponent(filename))); } catch(e) { return btoa(filename); }
+  })();
+  const block = document.querySelector(`.doc-block[data-filename-b64="${encoded}"]`);
   if (block) {
     // Expand this block if not already
     const content = block.querySelector('.doc-content');
@@ -491,14 +491,17 @@ function jumpToFile(filename) {
     let visibleCount = 0;
     
     blocks.forEach(block => {
-      const filename = (block.getAttribute('data-filename') || '').toLowerCase();
-      const headerText = (block.querySelector('.file-name')?.textContent || '').toLowerCase();
-      const tags = (block.querySelector('.file-tags')?.textContent || '').toLowerCase();
-      // Also search the visible text content of expanded blocks
-      const bodyText = (block.querySelector('.doc-content')?.textContent || '').toLowerCase();
-      const allText = filename + ' ' + headerText + ' ' + tags + ' ' + bodyText;
+      // Use pre-computed data-index attribute for fast filtering (title + tags)
+      const preIndex = (block.getAttribute('data-index') || '').toLowerCase();
+      // Also search content text for expanded blocks (only read DOM if needed)
+      let match = !q || preIndex.includes(q);
+      if (!match && q) {
+        // Fall back to content text search only for expanded blocks to avoid DOM reads
+        // This is a performance optimization: only read DOM when pre-index doesn't match
+        const bodyText = (block.querySelector('.doc-content')?.textContent || '').toLowerCase();
+        match = bodyText.includes(q);
+      }
       
-      const match = !q || allText.includes(q);
       block.classList.toggle('hidden', !match);
       if (match) visibleCount++;
     });

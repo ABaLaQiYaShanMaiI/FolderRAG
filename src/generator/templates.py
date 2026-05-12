@@ -6,6 +6,7 @@ Generates single-page knowledge portal with collapsible file contents.
 
 import os
 import string
+import base64
 from html import escape
 
 _TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
@@ -89,7 +90,13 @@ def build_file_content_blocks(docs_texts: list) -> str:
         escaped_text = escape(text)
         size_str = f"{size:,}" if size else "0"
         size_hr_escaped = escape(size_hr)
-        safe_filename = escape(title.replace('\\', '/'))
+        # Base64 encode the filename to avoid CSS selector escaping issues
+        # with special characters like &, ", ', etc.
+        safe_filename_b64 = base64.b64encode(title.replace('\\', '/').encode('utf-8')).decode('ascii')
+        
+        # Build pre-computed search index (lowercase title + tags for fast JS filtering)
+        search_index = (title.lower() + ' ' + ' '.join(t.lower() for t in tags)).strip()
+        safe_search_index = escape(search_index)
         
         # Build tags string
         tags_html = ""
@@ -103,7 +110,7 @@ def build_file_content_blocks(docs_texts: list) -> str:
         # Build the file block with header + collapsible content
         # Use onclick on the entire header row for easy toggle
         block = (
-            f'<div class="doc-block" data-filename="{safe_filename}">\n'
+            f'<div class="doc-block" data-filename-b64="{safe_filename_b64}" data-index="{safe_search_index}">\n'
             f'  <div class="doc-header" onclick="toggleDocBlock(this)">\n'
             f'    <span class="file-icon">{type_icon}</span>\n'
             f'    <span class="file-name">{escaped_title}</span>\n'

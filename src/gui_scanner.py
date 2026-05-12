@@ -55,7 +55,7 @@ except ImportError:
         '.prototxt', '.pbtxt', '.solver', '.trainval', '.test',
         '.cfg',
         '.csproj', '.fsproj', '.vbproj',
-        '.sln', '.suo', '.user', '.vsconfig',
+        '.sln', '.user', '.vsconfig',
         '.xaml', '.axaml',
     }
 
@@ -217,6 +217,9 @@ def build_html_from_files(
             if max_chars is not None and total_chars + file_chars > max_chars:
                 allowed = max_chars - total_chars
                 if allowed <= 0:
+                    articles.append(
+                        f"  <!-- {_label('已达到 --max-chars 限制（', 'Reached --max-chars limit (')}{max_chars}{_label(' 字符），后续文件已截断', ' chars), remaining files truncated')} -->"
+                    )
                     break
                 text = text[:allowed]
                 hit_limit = True
@@ -327,7 +330,7 @@ def build_text_from_files(
     hit_limit = False
     separator = "=" * 60  # separator between files
 
-    for finfo in file_list:
+    for file_idx, finfo in enumerate(file_list):
         if hit_limit:
             break
 
@@ -362,6 +365,23 @@ def build_text_from_files(
             if max_chars is not None and total_chars + file_chars > max_chars:
                 allowed = max_chars - total_chars
                 if allowed <= 0:
+                    # Already at or over limit: add truncation marker and stop
+                    remaining = len(file_list) - parsed_count - skipped_count - error_count
+                    parts.append(
+                        f"{separator}\n"
+                        f"[SKIPPED] {finfo['rel_path']} "
+                        f"(exceeds remaining char limit)\n"
+                        f"{separator}\n"
+                    )
+                    if remaining > 0:
+                        parts.append(
+                            f"\n... [Truncated at {max_chars:,} characters, "
+                            f"{remaining} remaining file(s) not included] ...\n"
+                        )
+                    else:
+                        parts.append(
+                            f"\n... [Truncated at {max_chars:,} characters] ...\n"
+                        )
                     break
                 text = text[:allowed]
                 hit_limit = True
@@ -383,9 +403,16 @@ def build_text_from_files(
             parsed_count += 1
 
             if hit_limit and max_chars:
-                parts.append(
-                    f"\n... [Truncated at {max_chars:,} characters] ...\n"
-                )
+                remaining = len(file_list) - parsed_count - skipped_count - error_count - 1  # -1 for current file
+                if remaining > 0:
+                    parts.append(
+                        f"\n... [Truncated at {max_chars:,} characters, "
+                        f"{remaining} remaining file(s) not included] ...\n"
+                    )
+                else:
+                    parts.append(
+                        f"\n... [Truncated at {max_chars:,} characters] ...\n"
+                    )
                 break
 
         except Exception:

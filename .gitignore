@@ -49,11 +49,31 @@ tmp_test_db/
 test_output/
 test_final_output/
 
-# Debug / test script residuals
+# Generated TXT/HTML export files (keep requirements.txt, README.md)
+output/
+*_export.txt
+*.txt
+!requirements.txt
+!README.md
+
+# Project-specific test data (keep source files, exclude generated artifacts)
+test_data/
+!test_data/*.py
+!test_data/*.md
+
+# Debug / test script residuals (files & directories)
 debug
+debug/
+debug_filter.py
+test_filter.py
+debug_results/
+debug_filter_results/
+compare_results/
 test_full_gui_repro.py
 test_gui_flow.py
 test_skip_result.txt
+# Temporary test scratch files
+*.scratch.*
 
-# Test data generated
-test_data/
+# GUI settings file (created at runtime)
+.folderknowledge_settings.json

@@ -47,6 +47,7 @@ try:
 except ImportError:
     HAS_PORTAL = False
 
+# Logger setup — will be reconfigured when --log-file is parsed
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,32 @@ def main():
         default=50000,
         help="[门户模式] 单文件最大字符数（默认 50,000，设为 0 不限）",
     )
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default=None,
+        help="将详细日志写入指定文件（默认仅输出到控制台）",
+    )
     args = parser.parse_args()
+
+    # ── Configure logging with optional file handler ──
+    if args.log_file:
+        log_path = args.log_file
+        try:
+            file_handler = logging.FileHandler(log_path, encoding='utf-8')
+            file_handler.setLevel(logging.DEBUG)
+            file_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+            file_handler.setFormatter(file_formatter)
+            # Add file handler to root logger
+            root_logger = logging.getLogger()
+            root_logger.addHandler(file_handler)
+            # Also set console to INFO level (file gets DEBUG level)
+            for handler in root_logger.handlers:
+                if isinstance(handler, logging.StreamHandler):
+                    handler.setLevel(logging.INFO)
+            logger.info("Detailed logging enabled → %s", log_path)
+        except Exception as e:
+            print(f"Warning: Cannot write log to {log_path} ({e}), logging to console only", file=sys.stderr)
 
     if not os.path.isdir(args.folder):
         print("错误：路径不是有效的文件夹：%s" % args.folder, file=sys.stderr)

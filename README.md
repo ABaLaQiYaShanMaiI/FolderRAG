@@ -153,6 +153,8 @@ usage: python generate.py [-h] -o OUTPUT [--max-chars MAX_CHARS]
 | 🧰 **`src/utils.py` 抽取** | `human_readable_size` 等工具函数集中管理 |
 | 📝 **模板变量化** | `index_page.html` 使用 `$placeholder` 标准占位符，而非硬编码字符串替换 |
 | 🚫 **LICENSE / .log / .lock 已移除** | 避免 TXT 中出现日志和配置文件 |
+| 🧹 **无冗余变量** | 消除 `build_text_from_files` 中未使用的 `hit_limit_index` |
+| 🚫 **.suo 从 fallback 移除** | `gui_scanner.py` 的 `FALLBACK_EXTS` 与 `constants.SUPPORTED_TEXT_EXTS` 保持同步，移除二进制 `.suo` 扩展名 |
 
 ---
 

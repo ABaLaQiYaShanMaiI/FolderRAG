@@ -16,6 +16,7 @@ Design decisions:
 
 import os
 import re
+import base64
 import logging
 from datetime import datetime
 from collections import Counter
@@ -187,8 +188,10 @@ def _walk_and_render(root: str, dirpath: str, lines: list, prefix: str, parsed_f
                 css_class += ' skipped'
 
             safe_filename = escape_html(rel_path.replace('\\', '/'))
+            # Base64 encode the filename to avoid escaping issues with special characters
+            filename_b64 = base64.b64encode(rel_path.replace('\\', '/').encode('utf-8')).decode('ascii')
             if is_parsed:
-                link_html = f'<a onclick="jumpToFile(\'{safe_filename}\')">📄 {name}</a>'
+                link_html = f'<a onclick="jumpToFile(\'{filename_b64}\')">📄 {name}</a>'
             else:
                 link_html = f'<span class="unparsed">⏭️ {name}</span>'
 
