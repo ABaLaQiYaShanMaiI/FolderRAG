@@ -3,9 +3,6 @@ FolderKnowledgeSiteGeneratorForAI — Shared Constants
 Single source of truth for file extension sets, filter rules, and type mappings.
 """
 
-import os
-
-
 # ── File extensions supported for text parsing ──
 # Used by gui_scanner.py (fallback when magic unavailable) and dispatcher.py
 # NOTE: .log is excluded; log files should be filtered by FILTER_EXTS instead.
