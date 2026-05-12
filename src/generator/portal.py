@@ -187,7 +187,6 @@ def _walk_and_render(root: str, dirpath: str, lines: list, prefix: str, parsed_f
             if not is_parsed:
                 css_class += ' skipped'
 
-            safe_filename = escape_html(rel_path.replace('\\', '/'))
             # Base64 encode the filename to avoid escaping issues with special characters
             filename_b64 = base64.b64encode(rel_path.replace('\\', '/').encode('utf-8')).decode('ascii')
             if is_parsed:
