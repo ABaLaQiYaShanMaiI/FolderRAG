@@ -28,98 +28,18 @@ from src.generator.templates import (
     build_file_content_blocks,
     _get_file_type,
 )
+from src.utils import human_readable_size
 
 logger = logging.getLogger(__name__)
 
-# Max characters per file before truncation.
-# Prevents a single huge file (e.g. 2MB SQL dump) from bloating the page and
-# exceeding AI context windows.
-MAX_CHARS_PER_FILE = 50_000
+# Default max characters per file before truncation.
+# Override via generate_portal(..., max_chars_per_file=...)
+_DEFAULT_MAX_CHARS_PER_FILE = 50_000
 
 
 # ============================================================
 #  Utility functions
 # ============================================================
-
-def human_readable_size(size_bytes: int) -> str:
-    """Convert bytes to human-readable format."""
-    if size_bytes == 0:
-        return "0 B"
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} TB"
-
-
-def make_safe_filename(rel_path: str, base_dir: str) -> str:
-    """Sanitize a relative file path into a safe HTML filename."""
-    # Normalize separators
-    rel = rel_path.replace('\\', '/').strip('/')
-    # Remove drive letters (e.g., C:)
-    rel = re.sub(r'^[A-Za-z]:', '', rel)
-    # Replace unsafe filename characters with underscores
-    safe = re.sub(r'[<>:"/\\|?*]', '_', rel)
-    # Collapse multiple underscores
-    safe = re.sub(r'_+', '_', safe)
-    # Remove leading/trailing underscores and dots
-    safe = safe.strip('_. ')
-    if not safe:
-        safe = 'untitled'
-    # Ensure .html extension
-    if not safe.endswith('.html'):
-        safe += '.html'
-    return safe
-
-
-def split_large_text(text: str, max_chars: int = 8000) -> list:
-    """Split large text into multiple parts, preferring splits at headings/paragraphs.
-    
-    Returns list of (chunk_text, heading_or_None) tuples.
-    """
-    if len(text) <= max_chars:
-        return [(text, None)]
-    
-    parts = []
-    # Try to split at markdown headings first
-    lines = text.split('\n')
-    current_chunk = []
-    current_size = 0
-    current_heading = None
-    
-    for line in lines:
-        line_len = len(line) + 1  # +1 for newline
-        
-        # Check if this is a heading
-        heading_match = re.match(r'^(#{1,6}\s+.*)$', line)
-        
-        if current_size + line_len > max_chars and current_chunk:
-            # Flush current chunk
-            parts.append(('\n'.join(current_chunk), current_heading))
-            current_chunk = []
-            current_size = 0
-            current_heading = None
-        
-        # If this is a heading, set it as the heading for the next chunk
-        if heading_match:
-            current_heading = heading_match.group(1)
-        
-        current_chunk.append(line)
-        current_size += line_len
-    
-    # Flush remaining
-    if current_chunk:
-        parts.append(('\n'.join(current_chunk), current_heading))
-    
-    # Edge case: if a single line exceeds max_chars, force split
-    if not parts:
-        # Force split at max_chars
-        for i in range(0, len(text), max_chars):
-            chunk = text[i:i + max_chars]
-            parts.append((chunk, None))
-    
-    return parts
-
 
 def extract_keywords(text: str, max_words: int = 8) -> list:
     """Extract keywords from text using frequency + stop word filtering."""
@@ -187,7 +107,7 @@ def _is_readme_file(rel_path: str) -> bool:
 
 
 # ============================================================
-#  HTMl escaping
+#  HTML escaping
 # ============================================================
 
 def escape_html(s: str) -> str:
@@ -214,12 +134,7 @@ def build_file_tree_html(folder_path: str, parsed_files: set = None) -> str:
 
 
 def _walk_and_render(root: str, dirpath: str, lines: list, prefix: str, parsed_files: set = None):
-    """Recursively walk directory and append tree lines.
-    
-    Args:
-        parsed_files: Set of relative paths that were successfully parsed.
-                      Files not in this set appear grey and unclickable.
-    """
+    """Recursively walk directory and append tree lines."""
     if parsed_files is None:
         parsed_files = set()
 
@@ -264,7 +179,6 @@ def _walk_and_render(root: str, dirpath: str, lines: list, prefix: str, parsed_f
             size_hr = human_readable_size(size)
             is_readme = _is_readme_file(rel_path)
 
-            # Check if this file was successfully parsed
             is_parsed = rel_path in parsed_files
             css_class = 'tree-file'
             if is_readme:
@@ -297,8 +211,19 @@ def generate_portal(
     include_skipped: bool = True,
     show_progress: bool = True,
     language: str = "en",
+    max_chars_per_file: int = _DEFAULT_MAX_CHARS_PER_FILE,
 ) -> dict:
-    """Generate single-page knowledge portal with all file contents."""
+    """Generate single-page knowledge portal with all file contents.
+    
+    Args:
+        folder_path: Root folder to scan.
+        output_dir: Output directory for generated portal.
+        include_skipped: Whether to show skipped file entries in file tree.
+        show_progress: Whether to print progress to console.
+        language: Language code ('en' or 'zh').
+        max_chars_per_file: Maximum characters per file before truncation.
+                            Set to 0 or None for no limit.
+    """
     if not os.path.isdir(folder_path):
         raise ValueError("Not a valid folder: %s" % folder_path)
 
@@ -319,6 +244,20 @@ def generate_portal(
                 all_files.append((full_path, rel_path))
 
     total_files = len(all_files)
+
+    # ── Issue 1 fix: early exit for empty folder ──
+    if total_files == 0:
+        logger.warning("No parseable files found in %s", folder_path)
+        return {
+            "doc_count": 0,
+            "total_chars": 0,
+            "skipped": 0,
+            "errors": 0,
+            "output_dir": output_dir,
+            "index_file": None,
+            "folder_name": os.path.basename(os.path.abspath(folder_path)),
+        }
+
     folder_name = os.path.basename(os.path.abspath(folder_path))
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -373,26 +312,18 @@ def generate_portal(
             continue
 
         char_count = len(text)
-        # Truncate extremely large files to prevent page bloat
-        # Use byte-aware truncation to avoid breaking multi-byte characters
-        # and always cut at a line boundary to preserve code structure
-        if MAX_CHARS_PER_FILE and char_count > MAX_CHARS_PER_FILE:
-            # First, safely truncate at a newline boundary, never in the middle of a multi-byte char
-            truncated = text[:MAX_CHARS_PER_FILE]
-            # Ensure we don't break a multi-byte UTF-8 character: walk back to a valid boundary
-            # by ensuring the last character isn't a continuation byte
-            while len(truncated) > 0:
-                last_byte = truncated[-1].encode('utf-8')[-1]
-                if (last_byte & 0xC0) != 0x80:  # Not a continuation byte → safe boundary
-                    break
-                truncated = truncated[:-1]  # Remove the continuation byte
+
+        # ── Issue 2 fix: remove dead UTF-8 byte check, keep line-boundary truncation ──
+        # ── Issue 10 fix: use max_chars_per_file parameter instead of hardcoded constant ──
+        if max_chars_per_file and char_count > max_chars_per_file:
+            truncated = text[:max_chars_per_file]
             last_newline = truncated.rfind('\n')
-            if last_newline > MAX_CHARS_PER_FILE * 0.5:  # Only use line boundary if reasonable
+            if last_newline > max_chars_per_file * 0.5:
                 truncated = truncated[:last_newline]
             text = truncated
             text += (
-                f"\n\n... [截断：原文 {char_count:,} 字符，仅展示前 {MAX_CHARS_PER_FILE:,} 字符] ...\n"
-                f"... [Truncated: original {char_count:,} chars, showing first {MAX_CHARS_PER_FILE:,} chars] ..."
+                f"\n\n... [截断：原文 {char_count:,} 字符，仅展示前 {max_chars_per_file:,} 字符] ...\n"
+                f"... [Truncated: original {char_count:,} chars, showing first {max_chars_per_file:,} chars] ..."
             )
             char_count = len(text)
 
@@ -427,7 +358,6 @@ def generate_portal(
     docs_meta.sort(key=lambda d: d.get("title", "").lower())
     docs_texts.sort(key=lambda d: d.get("title", "").lower())
 
-    # Print skip reasons to console
     if skip_by_reason:
         print(f"  [Skip Summary] {skipped_count} files skipped:")
         for reason, count in sorted(skip_by_reason.items(), key=lambda x: -x[1]):
@@ -435,7 +365,6 @@ def generate_portal(
     if error_count:
         print(f"  [Error Summary] {error_count} file(s) failed to parse")
 
-    # Build file tree with parsed file paths, so skipped/unparsed files appear grey
     parsed_paths = {d["file"] for d in docs_meta if not d.get("skipped")}
     file_tree_html = build_file_tree_html(folder_path, parsed_files=parsed_paths) if include_skipped else ""
     file_contents_html = build_file_content_blocks(docs_texts)

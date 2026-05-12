@@ -1,11 +1,26 @@
 import os
 import logging
-import magic
 from .text_parser import parse_text
 from .pdf_parser import parse_pdf
 from .office_parser import parse_office
 
-_magic = magic.Magic(mime=True)
+# Graceful fallback if python-magic is not installed or fails to load.
+# We catch *all* exceptions because magic can raise:
+#   - ImportError: not installed
+#   - AttributeError: version mismatch (e.g., python-magic d0.4.24 lacks Magic)
+#   - OSError/FileNotFoundError: shared library (libmagic) not found on system
+#   - ctypes.CDLL error on Windows: bundled magic1.dll missing/corrupt
+try:
+    import magic
+    _magic = magic.Magic(mime=True)
+except Exception:
+    magic = None
+    _magic = None
+    import logging as _logging
+    _logging.getLogger(__name__).debug(
+        "python-magic not available (or failed to load). "
+        "Falling back to extension-based dispatch."
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +87,14 @@ def parse_file(filepath):
         logger.debug("Skipping known binary file: %s", filepath)
         return None
     
-    # ATTENTION: magic.from_file can raise MagicException for .cs files due to
-    # a regex bug in the libmagic database on Windows. We must catch ALL exceptions.
-    try:
-        mime = _magic.from_file(filepath)
-    except Exception:
-        mime = None
-        logger.debug("magic.from_file() failed for %s, falling back to extension", filepath)
+    # Try MIME-based dispatch (gracefully handle missing or broken python-magic).
+    mime = None
+    if _magic is not None:
+        try:
+            mime = _magic.from_file(filepath)
+        except Exception:
+            mime = None
+            logger.debug("magic.from_file() failed for %s, falling back to extension", filepath)
 
     if mime:
         if mime.startswith("text/"):

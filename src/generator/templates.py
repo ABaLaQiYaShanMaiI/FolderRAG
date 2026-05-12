@@ -5,6 +5,7 @@ Generates single-page knowledge portal with collapsible file contents.
 """
 
 import os
+import string
 from html import escape
 
 _TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
@@ -170,22 +171,24 @@ def wrap_index_html(
     escaped_index_keywords = escape(", ".join(index_keywords_list))
 
     template = _load_template("index_page.html")
-    result = template.replace("$escaped_folder", escaped_folder)
-    result = result.replace("$language", language)
-    result = result.replace("$escaped_subtitle", "Knowledge Portal")
-    result = result.replace("$escaped_path", escaped_path)
-    result = result.replace("$doc_count", str(doc_count))
-    result = result.replace("$skipped_count", str(skipped_count))
-    result = result.replace("$total_chars", f"{total_chars:,}")
-    result = result.replace("$total_size_hr", total_size_hr)
-    result = result.replace("$generated_at_escaped", escape(generated_at))
-    result = result.replace("$tags_cloud_html", tags_cloud_html)
-    result = result.replace("$cards_html", "")  # Cards removed, all info in file blocks
-    result = result.replace("$file_tree_html", file_tree_html)
-    result = result.replace("$file_contents_html", file_contents_html)
-    result = result.replace("$meta_description_escaped", escaped_index_meta_desc)
-    result = result.replace("$meta_keywords_escaped", escaped_index_keywords)
-
+    tpl = string.Template(template)
+    result = tpl.safe_substitute({
+        "escaped_folder": escaped_folder,
+        "language": language,
+        "escaped_subtitle": "Knowledge Portal",
+        "escaped_path": escaped_path,
+        "doc_count": str(doc_count),
+        "skipped_count": str(skipped_count),
+        "total_chars": f"{total_chars:,}",
+        "total_size_hr": total_size_hr,
+        "generated_at_escaped": escape(generated_at),
+        "tags_cloud_html": tags_cloud_html,
+        "cards_html": "",
+        "file_tree_html": file_tree_html,
+        "file_contents_html": file_contents_html,
+        "meta_description_escaped": escaped_index_meta_desc,
+        "meta_keywords_escaped": escaped_index_keywords,
+    })
     return result
 
 
@@ -220,11 +223,14 @@ def wrap_skipped_html(
         Complete HTML string for a skipped file info page
     """
     template = _load_template("skipped_page.html")
-    result = template.replace("$escaped_title", escape(title))
-    result = result.replace("$escaped_folder", escape(folder_name))
-    result = result.replace("$file_size_hr", escape(file_size_hr) if file_size_hr else "Unknown")
-    result = result.replace("$escaped_filepath", escape(filepath) if filepath else "N/A")
-    result = result.replace("$breadcrumb_name", escape(title))
-    result = result.replace("$index_link", "index.html")
-    result = result.replace("$meta_lines", "")
+    tpl = string.Template(template)
+    result = tpl.safe_substitute({
+        "escaped_title": escape(title),
+        "escaped_folder": escape(folder_name),
+        "file_size_hr": escape(file_size_hr) if file_size_hr else "Unknown",
+        "escaped_filepath": escape(filepath) if filepath else "N/A",
+        "breadcrumb_name": escape(title),
+        "index_link": "index.html",
+        "meta_lines": "",
+    })
     return result

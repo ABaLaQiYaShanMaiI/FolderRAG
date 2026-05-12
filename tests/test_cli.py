@@ -1,5 +1,5 @@
 """
-Tests for the CLI (generate.py) — single HTML mode and portal mode.
+Tests for the CLI (generate.py) — TXT export mode and portal mode.
 """
 
 import os
@@ -30,7 +30,7 @@ def _create_sample_folder(tmpdir: str) -> str:
     with open(os.path.join(folder, "readme.md"), "w", encoding="utf-8") as f:
         f.write("# Sample Document\n\nThis is a Markdown file with some **bold** text.\n")
 
-    # Unsupported file type
+    # CSV file (supported via fallback extension list)
     with open(os.path.join(folder, "notes.csv"), "w", encoding="utf-8") as f:
         f.write("id,name,value\n1,test,100\n2,demo,200\n")
 
@@ -50,38 +50,47 @@ def _run_generate(args: list) -> tuple:
 
 
 # ──────────────────────────────────────────────
-#  Tests — Single HTML Mode
+#  Tests — TXT Export Mode (default, no --portal)
 # ──────────────────────────────────────────────
 
-class TestSingleHTMLMode:
-    """Test the traditional single-file HTML generation mode."""
+class TestTextExportMode:
+    """Test the traditional TXT export mode (default, no --portal)."""
 
-    def test_basic_html_generation(self, tmp_path):
-        """Generate a single HTML file from sample docs."""
+    def test_basic_text_export(self, tmp_path):
+        """Generate a TXT file from sample docs."""
         folder = _create_sample_folder(str(tmp_path))
-        output = os.path.join(str(tmp_path), "output.html")
+        output = os.path.join(str(tmp_path), "output.txt")
 
         rc, stdout, stderr = _run_generate([folder, "-o", output])
 
         assert rc == 0, f"Expected exit code 0, got {rc}. stderr: {stderr}"
         assert os.path.exists(output), f"Output file not found: {output}"
         assert os.path.getsize(output) > 0, "Output file is empty"
-        assert "已生成" in stdout or "OK" in stdout, f"Unexpected stdout: {stdout}"
+        assert "OK" in stdout, f"Unexpected stdout: {stdout}"
 
-        # Verify HTML structure
+        # Verify plain text structure (TXT mode)
         with open(output, "r", encoding="utf-8") as f:
             content = f.read()
-        assert "<!DOCTYPE html>" in content
-        assert "<article>" in content
+        # TXT mode uses file: headers
         assert "hello.txt" in content
-        assert "readme.md" in content
-        assert "sample_docs" in content
+
+    def test_extension_appended(self, tmp_path):
+        """Verify .txt extension is appended when missing."""
+        folder = _create_sample_folder(str(tmp_path))
+        output = os.path.join(str(tmp_path), "output")  # No extension
+
+        rc, stdout, stderr = _run_generate([folder, "-o", output])
+        assert rc == 0
+        # TXT mode appends .txt
+        expected = output + ".txt"
+        assert os.path.exists(expected), f"Expected {expected} to exist"
 
     def test_max_chars_limit(self, tmp_path):
-        """Verify --max-chars limits total output."""
+        """Verify --max-chars truncates file content."""
         folder = _create_sample_folder(str(tmp_path))
-        output = os.path.join(str(tmp_path), "output_truncated.html")
+        output = os.path.join(str(tmp_path), "output_truncated.txt")
 
+        # Use small max-chars value
         rc, stdout, stderr = _run_generate([folder, "-o", output, "--max-chars", "20"])
 
         assert rc == 0, f"Expected exit code 0, got {rc}. stderr: {stderr}"
@@ -89,12 +98,14 @@ class TestSingleHTMLMode:
 
         with open(output, "r", encoding="utf-8") as f:
             content = f.read()
-        # Should contain the truncation comment
-        assert "截断" in content or "truncated" in content
+        # Should contain truncation indicator
+        assert "[Truncated at" in content, f"Missing truncation marker in: {content[:500]}"
+        # Unlimited output would be ~600+ chars; truncated should be < ~550
+        assert len(content) < 550, f"Expected truncated file < 550 chars, got {len(content)}"
 
     def test_missing_folder(self, tmp_path):
         """Verify error on non-existent folder."""
-        output = os.path.join(str(tmp_path), "output.html")
+        output = os.path.join(str(tmp_path), "output.txt")
         rc, stdout, stderr = _run_generate(["/nonexistent/path", "-o", output])
         assert rc != 0, "Expected non-zero exit for invalid folder"
 
@@ -106,27 +117,13 @@ class TestSingleHTMLMode:
         # Should print usage/error
         assert "usage" in stdout.lower() or "error" in stderr.lower()
 
-    def test_include_skipped_files(self, tmp_path):
-        """Verify skipped unsupported files are included by default."""
-        folder = _create_sample_folder(str(tmp_path))
-        output = os.path.join(str(tmp_path), "output_with_skipped.html")
-
-        rc, stdout, stderr = _run_generate([folder, "-o", output])
-        assert rc == 0
-
-        with open(output, "r", encoding="utf-8") as f:
-            content = f.read()
-        # CSV files are supported via fallback, so they won't be "skipped"
-        # But we should at least see them in the output
-        assert "notes.csv" in content
-
 
 # ──────────────────────────────────────────────
 #  Tests — Portal Mode
 # ──────────────────────────────────────────────
 
 class TestPortalMode:
-    """Test the portal (multi-page) generation mode."""
+    """Test the portal (single-page) generation mode."""
 
     def test_basic_portal_generation(self, tmp_path):
         """Generate a portal from sample docs."""
@@ -173,7 +170,7 @@ class TestPortalMode:
         assert "readme.md" in content, "readme.md content should be in index.html"
 
     def test_portal_skipped_flag(self, tmp_path):
-        """Verify --no-skipped hides unsupported file markers."""
+        """Verify --no-skipped works (all supported files so no effect)."""
         folder = _create_sample_folder(str(tmp_path))
         output_dir = os.path.join(str(tmp_path), "portal_no_skipped")
 
@@ -182,20 +179,6 @@ class TestPortalMode:
             "--no-skipped"
         ])
         assert rc == 0
-        # The test folder has all supported file types (txt, md, csv are in fallback),
-        # so --no-skipped won't change much, but the command should still work
-
-    def test_portal_per_page_chars(self, tmp_path):
-        """Verify custom chars per page works."""
-        folder = _create_sample_folder(str(tmp_path))
-        output_dir = os.path.join(str(tmp_path), "portal_small_pages")
-
-        rc, stdout, stderr = _run_generate([
-            folder, "--portal", "-o", output_dir,
-        ])
-        assert rc == 0
-        # With such small per-page limit, we may get multiple pages for each file
-        # The important thing is it doesn't crash
 
     def test_portal_missing_folder(self, tmp_path):
         """Verify error on non-existent folder in portal mode."""

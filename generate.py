@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-FolderKnowledgeSiteGeneratorForAI — Folder to Knowledge HTML / Portal Generator
+FolderKnowledgeSiteGeneratorForAI — Folder to Knowledge TXT / Portal Generator
 
 Usage:
-    # 传统模式：生成单个大 HTML 文件
-    python generate.py <folder_path> -o <output.html>
-    python generate.py <folder_path> -o <output.html> --max-chars 50000
+    # TXT 模式：生成单个大 TXT 文件
+    python generate.py <folder_path> -o <output.txt>
+    python generate.py <folder_path> -o <output.txt> --max-chars 50000
 
     # 门户模式：生成可搜索的单页知识门户
     python generate.py <folder_path> --portal -o <output_dir/>
 
 Scans all files in a folder, parses documents (PDF, DOCX, PPTX, XLSX, TXT, etc.),
 and generates:
-  - 传统模式：一个结构化 HTML 文件，适合直接喂给 LLM
+  - TXT 模式：一个纯文本文件，适合直接喂给 LLM
   - 门户模式：一个可搜索、可折叠的单页知识门户，适合 AI 完整消费
 """
 
@@ -98,6 +98,12 @@ def main():
         action="store_true",
         help="[门户模式] 不在首页中显示不支持的文档标记",
     )
+    parser.add_argument(
+        "--max-chars-per-file",
+        type=int,
+        default=50000,
+        help="[门户模式] 单文件最大字符数（默认 50,000，设为 0 不限）",
+    )
     args = parser.parse_args()
 
     if not os.path.isdir(args.folder):
@@ -114,10 +120,14 @@ def main():
         print("[FolderKnowledgeSiteGeneratorForAI] 正在生成知识门户到: %s" % output_dir)
         print()
 
+        max_cpf = args.max_chars_per_file
+        if max_cpf == 0:
+            max_cpf = None
         result = generate_portal(
             folder_path=args.folder,
             output_dir=output_dir,
             include_skipped=not args.no_skipped,
+            max_chars_per_file=max_cpf,
         )
 
         index_file = result.get("index_file")
@@ -153,8 +163,6 @@ def main():
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(text)
-
-        file_count_text = text.count('=' * 60) - 1  # Subtract the header separator
         print("OK - 已生成知识文件: %s" % output_path)
         print("    共包含 %d 个文件内容, %d 总字符" % (parsed, chars))
         if skipped:

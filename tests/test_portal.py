@@ -7,22 +7,8 @@ import tempfile
 from src.generator.portal import (
     generate_portal,
     extract_keywords,
-    make_safe_filename,
     human_readable_size,
-    split_large_text,
 )
-
-
-def test_make_safe_filename():
-    """Test filename sanitization."""
-    result = make_safe_filename(
-        r"C:\docs\技术文档\需求说明书.pdf",
-        r"C:\docs"
-    )
-    assert "需求说明书" in result
-    assert result.endswith(".html")
-    assert ":" not in result
-    assert "\\" not in result
 
 
 def test_human_readable_size():
@@ -57,23 +43,6 @@ def test_extract_keywords_stop_words():
     # "的", "了", "是", "一" etc should be filtered out
     for kw in keywords:
         assert kw not in ('的', '了', '是', '一', '一个', '在')
-
-
-def test_split_large_text_no_split():
-    """Test that small text is not split."""
-    text = "Short text"
-    parts = split_large_text(text, max_chars=8000)
-    assert len(parts) == 1
-    assert parts[0][0] == text
-    assert parts[0][1] is None
-
-
-def test_split_large_text_actually_splits():
-    """Test that large text is split into multiple parts."""
-    # Create text that exceeds max_chars
-    text = "\n\n".join(["Paragraph " + str(i) * 100 for i in range(50)])
-    parts = split_large_text(text, max_chars=500)
-    assert len(parts) > 1
 
 
 def test_generate_portal_empty_folder():
@@ -175,13 +144,6 @@ def test_generate_portal_doc_sorting():
         # Index should be generated
         assert result["index_file"] is not None
         assert os.path.exists(result["index_file"])
-
-
-def test_split_large_text_with_headings():
-    """Test that split_large_text handles markdown headings."""
-    text = "# Introduction\n\nThis is the intro.\n\n# Methods\n\nThis describes methods.\n\n# Results\n\nThese are the results.\n\n# Conclusion\n\nThis is the conclusion."
-    parts = split_large_text(text, max_chars=50)
-    assert len(parts) > 1
 
 
 # ──────────────────────────────────────────────

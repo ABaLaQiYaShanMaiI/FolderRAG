@@ -8,9 +8,10 @@ import os
 
 # ── File extensions supported for text parsing ──
 # Used by gui_scanner.py (fallback when magic unavailable) and dispatcher.py
+# NOTE: .log is excluded; log files should be filtered by FILTER_EXTS instead.
 SUPPORTED_TEXT_EXTS = frozenset({
     '.txt', '.md', '.html', '.htm', '.json', '.xml', '.csv',
-    '.yaml', '.yml', '.toml', '.ini', '.log', '.cfg', '.conf',
+    '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
     '.py', '.pyw', '.js', '.jsx', '.ts', '.tsx', '.css', '.scss', '.less',
     '.sh', '.bash', '.zsh', '.fish', '.bat', '.cmd', '.ps1', '.psm1', '.psd1',
     '.rb', '.java', '.c', '.cpp', '.h', '.hpp', '.cc', '.cxx', '.hh', '.hxx',
@@ -25,7 +26,7 @@ SUPPORTED_TEXT_EXTS = frozenset({
     '.cfg',
     # .NET project & solution files (XML/text)
     '.csproj', '.fsproj', '.vbproj',
-    '.sln', '.suo', '.user', '.vsconfig',
+    '.sln', '.user', '.vsconfig',
     '.xaml', '.axaml',
 })
 
@@ -80,7 +81,7 @@ FILE_TYPE_MAP = {
     # C-family / .NET
     '.cs': 'C#', '.fs': 'F#', '.vb': 'VB.NET',
     '.csproj': 'C# Project', '.fsproj': 'F# Project', '.vbproj': 'VB.NET Project',
-    '.sln': 'Solution File', '.suo': 'Solution User Options',
+    '.sln': 'Solution File',
     '.user': 'User Settings', '.vsconfig': 'VS Config',
     '.xaml': 'XAML', '.axaml': 'Avalonia XAML',
     '.cpp': 'C++', '.c': 'C', '.h': 'C Header',
@@ -115,6 +116,7 @@ FILE_TYPE_MAP = {
 
 # ── Known binary file extensions that should NOT be parsed as text ──
 # Used by dispatcher.py
+# .suo is moved here from SUPPORTED_TEXT_EXTS because it's a binary VS file
 KNOWN_BINARY_EXTS = frozenset({
     '.pt', '.pth', '.pkl', '.joblib',  # PyTorch / pickle
     '.onnx',                           # ONNX model
@@ -131,6 +133,7 @@ KNOWN_BINARY_EXTS = frozenset({
     '.exe', '.msi', '.dmg',            # Executables
     '.o', '.obj', '.a', '.lib',        # Object files
     '.pyc', '.pyo', '.class',           # Compiled
+    '.suo',                            # Binary Visual Studio user options
     '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp',  # Images
     '.mp3', '.mp4', '.avi', '.mov', '.wav', '.flac',   # Media
 })
@@ -154,7 +157,7 @@ FILE_TYPE_ICONS = {
     'Ruby': '💎', 'Java': '☕',
     'C#': '🔷', 'F#': '🔷', 'VB.NET': '🔷',
     'C# Project': '🔷', 'F# Project': '🔷', 'VB.NET Project': '🔷',
-    'Solution File': '📋', 'Solution User Options': '⚙️',
+    'Solution File': '📋',
     'User Settings': '⚙️', 'VS Config': '⚙️',
     'XAML': '🪟', 'Avalonia XAML': '🪟',
     'C++': '⚡', 'C': '⚡', 'C Header': '⚡',

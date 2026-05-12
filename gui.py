@@ -20,7 +20,8 @@ try:
 except ImportError:
     HAS_PORTAL = False
 
-from src.gui_scanner import collect_files_info, build_html_from_files, build_text_from_files, human_readable_size, _
+from src.gui_scanner import collect_files_info, build_text_from_files
+from src.utils import human_readable_size
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
