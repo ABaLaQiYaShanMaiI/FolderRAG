@@ -17,9 +17,6 @@ Key design decisions:
 """
 
 import os
-import re
-import sys
-import pathlib
 import logging
 from html import escape
 from datetime import datetime
