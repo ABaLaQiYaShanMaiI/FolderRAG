@@ -52,7 +52,7 @@
 
   /* Search */
   .search-section {
-    background: white; border-radius: 10px; padding: 16px 20px;
+    background: white; border-radius: 10px; padding: 12px 20px;
     margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   }
   .search-box {
@@ -62,16 +62,50 @@
   }
   .search-box:focus { border-color: #1a73e8; }
 
-  /* Layout: left panel (tree) + right panel (file blocks) */
+  /* Search controls row */
+  .search-controls {
+    display: flex; align-items: center; gap: 12px; margin-top: 8px;
+  }
+  .search-mode-group {
+    display: flex; gap: 4px; align-items: center;
+  }
+  .search-mode-btn {
+    padding: 2px 10px; font-size: 0.75em; cursor: pointer;
+    border: 1px solid #dadce0; border-radius: 4px;
+    background: #f8f9fa; color: #666;
+    transition: all 0.15s; user-select: none;
+  }
+  .search-mode-btn:hover { background: #e8f0fe; border-color: #1a73e8; }
+  .search-mode-btn.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+  .search-match-count {
+    font-size: 0.8em; color: #1a73e8; font-weight: 600; margin-left: auto;
+  }
+
+  /* Layout: left panel (tree) + right panel (tip card) */
   .main-layout {
     display: flex; gap: 16px;
   }
-  .left-panel { flex: 0 0 305px; min-width: 220px; }
-  .right-panel { flex: 1; min-width: 0; }
+  .left-panel { flex: 3; min-width: 260px; }
+  .right-panel { flex: 2; min-width: 200px; }
 
   @media (max-width: 800px) {
     .main-layout { flex-direction: column; }
-    .left-panel { flex: none; width: 100%; }
+    .left-panel, .right-panel { flex: none; width: 100%; }
+  }
+
+  /* Horizontal tag cloud between search and main layout */
+  .tag-cloud--horizontal {
+    margin-bottom: 16px; padding: 8px 16px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  }
+  .tag-cloud--horizontal .tag-cloud-title {
+    font-size: 0.85em; color: #666; margin-right: 8px; white-space: nowrap;
+  }
+  .tag-cloud--horizontal .cloud-tag {
+    margin: 2px 4px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .tag-cloud--horizontal .tag-cloud-title { color: #aaa; }
   }
 
   /* File Tree — collapsible folder structure */
@@ -142,18 +176,21 @@
   .file-blocks-title {
     font-size: 1em; font-weight: 600; color: #333;
   }
-  /* Tighten the tip section to make room for the wider tree */
+  /* Tip card — left-aligned, same padding as tree */
   .split-mode-info { display: none; }
-  .split-mode-info.visible { display: block; text-align: center; padding: 16px 8px; }
-  .split-mode-info .info-icon { font-size: 2em; margin-bottom: 6px; }
-  .split-mode-info h3 { font-size: 1em; color: #333; margin-bottom: 4px; }
-  .split-mode-info p { font-size: 0.8em; color: #666; line-height: 1.4; margin-bottom: 3px; }
+  .split-mode-info.visible { display: block; text-align: left; padding: 14px; }
+  .split-mode-info .info-icon { font-size: 2em; margin-bottom: 10px; }
+  .split-mode-info h3 { font-size: 1em; color: #333; margin-bottom: 8px; }
+  .split-mode-info p {
+    font-size: 0.85em; color: #555; line-height: 1.6; margin-bottom: 6px;
+    padding-left: 4px;
+  }
   .split-mode-info .tip {
-    display: inline-block; margin-top: 6px; padding: 4px 12px;
+    display: block; margin-top: 12px; padding: 6px 12px;
     background: #e8f0fe; border-radius: 6px; font-size: 0.78em; color: #1a73e8;
   }
   .split-mode-info .tip.compact {
-    font-size: 0.72em; padding: 3px 8px;
+    font-size: 0.76em; padding: 5px 12px;
   }
 
   .empty-state {
@@ -231,11 +268,24 @@
 <div class="search-section">
   <input type="text" class="search-box" id="searchInput"
          data-i18n-placeholder="search_placeholder" placeholder="🔍 Search file names and contents...">
+  <div class="search-controls">
+    <span class="search-mode-group" id="searchModeGroup">
+      <span class="search-mode-btn active" data-mode="name" data-i18n="search_mode_name" onclick="setSearchMode('name')">📄 Name</span>
+      <span class="search-mode-btn" data-mode="content" data-i18n="search_mode_content" onclick="setSearchMode('content')">📝 Content</span>
+      <span class="search-mode-btn" data-mode="both" data-i18n="search_mode_both" onclick="setSearchMode('both')">🔀 Name & Content</span>
+    </span>
+    <span class="search-match-count" id="searchMatchCount"></span>
+  </div>
+</div>
+
+<div class="tag-cloud tag-cloud--horizontal">
+  <span class="tag-cloud-title">🏷️ <span data-i18n="keywords">Keywords</span></span>
+  $tags_cloud_html
 </div>
 
 <div class="main-layout">
 
-<!-- Left: File tree + tag cloud -->
+<!-- Left: File tree only -->
 <div class="left-panel">
   <div class="file-tree-section">
     <div class="tree-title">
@@ -249,28 +299,21 @@
       $file_tree_html
     </ul>
   </div>
-  <div class="tag-cloud">
-    <div class="tag-cloud-title">🏷️ <span data-i18n="keywords">Keywords</span></div>
-    <div>$tags_cloud_html</div>
-  </div>
 </div>
 
-<!-- Right: File blocks (always expanded) -->
+<!-- Right: Operation tip card only -->
 <div class="right-panel">
   <div class="file-blocks-section">
-    <div class="file-blocks-header">
-      <span class="file-blocks-title">📄 <span data-i18n="file_contents">File Contents</span></span>
-    </div>
-    <div id="fileBlocksList">
-      $file_contents_html
-    </div>
-    <div class="split-mode-info" id="splitModeInfo">
-      <div class="info-icon">📚</div>
-      <h3 data-i18n="split_title">Split Mode</h3>
-      <p data-i18n="split_desc1">Each file has its own subpage under the <code>docs/</code> folder.</p>
-      <p data-i18n="split_desc2">Click any file name in the tree to open it in a new tab.</p>
-      <p data-i18n="split_desc3">Search filters file names and file contents (tags + preview).</p>
-      <div class="tip compact">💡 <span data-i18n="split_tip">Ctrl+click to open multiple tabs</span></div>
+    <div class="split-mode-info visible" id="splitModeInfo">
+      <div class="info-icon">📖</div>
+      <h3 data-i18n="usage_title">How to Use</h3>
+      <p data-i18n="usage_click">Click any file name in the tree to open its subpage</p>
+      <p data-i18n="usage_search">Type in the search box to filter files</p>
+      <p data-i18n="usage_tags">Click a keyword tag to quickly filter</p>
+      <p data-i18n="usage_multiple">Ctrl+click to open multiple subpages</p>
+      <div class="tip compact">
+        <span data-i18n="usage_shortcut">⌨ Press / to focus search · Esc to clear</span>
+      </div>
     </div>
     <div class="empty-state" id="emptyState">
       <p>😕 <span data-i18n="no_match">No matching documents found</span></p>
@@ -302,13 +345,17 @@ const i18n = {
     generated_by: 'Generated by',
     copy_file: 'Copy this file',
     copy_success: '✅ Copied!',
-    split_title: 'Split Mode',
-    split_desc1: 'Each file has its own subpage under the docs/ folder.',
-    split_desc2: 'Click any file name in the tree to open it in a new tab.',
-    split_desc3: 'Search filters file names and file contents (tags + preview).',
-    split_tip: 'Ctrl+click to open multiple tabs',
     expand_all: '＋ Expand All',
     collapse_all: '－ Collapse All',
+    search_mode_name: 'Name',
+    search_mode_content: 'Content',
+    search_mode_both: 'Name & Content',
+    usage_title: 'How to Use',
+    usage_click: 'Click any file name in the tree to open its subpage',
+    usage_search: 'Type in the search box to filter files',
+    usage_tags: 'Click a keyword tag to quickly filter',
+    usage_multiple: 'Ctrl+click to open multiple subpages',
+    usage_shortcut: '⌨ Press / to focus search · Esc to clear',
   },
   zh: {
     subtitle: '知识门户 — 每个文件独立子页面，通过文件树和搜索导航',
@@ -324,13 +371,17 @@ const i18n = {
     generated_by: '由',
     copy_file: '复制此文件',
     copy_success: '✅ 已复制！',
-    split_title: '拆分模式',
-    split_desc1: '每个文件在 docs/ 目录下有独立的子页面。',
-    split_desc2: '点击文件树中的文件名，可在新标签页中打开。',
-    split_desc3: '搜索会匹配文件名和文件内容（标签 + 预览）。',
-    split_tip: '按住 Ctrl 点击可一次打开多个标签页',
     expand_all: '＋ 全部展开',
     collapse_all: '－ 全部折叠',
+    search_mode_name: '文件名',
+    search_mode_content: '文档内容',
+    search_mode_both: '文件名和文档内容',
+    usage_title: '如何使用',
+    usage_click: '点击文件树中的文件名打开对应子页面',
+    usage_search: '在搜索框中输入关键词来筛选文件',
+    usage_tags: '点击关键词标签可快速筛选',
+    usage_multiple: '按住 Ctrl 点击可一次打开多个子页面',
+    usage_shortcut: '⌨ 按 / 聚焦搜索 · Esc 清空',
   }
 };
 
@@ -387,12 +438,9 @@ function expandAllFolders() {
 }
 
 function collapseAllFolders() {
-  // Don't collapse root level
   document.querySelectorAll('.folder-children').forEach(el => {
-    // Check if this is not the top-level tree root
-    if (!el.closest('.tree-list > .tree-folder > .folder-children')) {
-      el.classList.add('collapsed');
-    }
+    // Collapse all folders including root level
+    el.classList.add('collapsed');
   });
   document.querySelectorAll('.folder-toggle-icon').forEach(icon => {
     icon.textContent = '▶';
@@ -415,12 +463,28 @@ function collapseAllFolders() {
   });
 })();
 
+// ── Search mode state ──
+let currentSearchMode = 'name';
+
+function setSearchMode(mode) {
+  currentSearchMode = mode;
+  document.querySelectorAll('.search-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
+  });
+  // Re-run search with current query
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    searchInput.dispatchEvent(new Event('input'));
+  }
+}
+
 // ── Search functionality (split mode) ──
 (function() {
   const searchInput = document.getElementById('searchInput');
   const treeList = document.getElementById('fileTree');
   const splitModeInfo = document.getElementById('splitModeInfo');
   const cloudTags = document.querySelectorAll('.cloud-tag');
+  const matchCountEl = document.getElementById('searchMatchCount');
 
   if (!searchInput || !treeList) return;
 
@@ -430,41 +494,116 @@ function collapseAllFolders() {
   const treeItems = treeList.querySelectorAll('li');
   const SEARCH_INDEX = (typeof window.SEARCH_INDEX !== 'undefined') ? window.SEARCH_INDEX : [];
 
+  // Build a lookup: path -> SEARCH_INDEX entry
+  const pathToSearchIndex = {};
+  SEARCH_INDEX.forEach(item => {
+    const key = item.path.replace(/[/\\]/g, '_');
+    pathToSearchIndex[key] = item;
+  });
+
+  // For content search: cache per-file match counts
+  function countContentMatches(searchIndexEntry, query) {
+    if (!searchIndexEntry) return 0;
+    let count = 0;
+    const q = query.toLowerCase();
+    const tagText = (searchIndexEntry.tags || []).join(' ').toLowerCase();
+    const previewText = (searchIndexEntry.preview || '').toLowerCase();
+    if (tagText.includes(q)) count++;
+    if (previewText.includes(q)) count++;
+    return count;
+  }
+
   function filterSplitMode(query) {
     const q = query.toLowerCase().trim();
     let visibleCount = 0;
+
+    // Update match count text
+    if (matchCountEl) {
+      if (q) {
+        // We'll update visible count at the end
+      } else {
+        matchCountEl.textContent = '';
+      }
+    }
 
     treeItems.forEach(li => {
       if (!q) {
         li.style.display = '';
         visibleCount++;
+        // Remove any match count badge
+        const badge = li.querySelector('.match-count-badge');
+        if (badge) badge.remove();
+        // Reset the tree-file name text to original
+        const nameSpan = li.querySelector('.tree-file-name-text');
+        if (nameSpan) {
+          nameSpan.textContent = nameSpan.getAttribute('data-original') || nameSpan.textContent;
+        }
         return;
       }
+      
       const text = (li.textContent || '').toLowerCase();
-      let match = text.includes(q);
-
-      // If not matched by name, try searching in SEARCH_INDEX (tags + preview content)
-      if (!match && SEARCH_INDEX.length > 0) {
+      
+      // Determine match based on current mode
+      let match = false;
+      let contentCount = 0;
+      
+      if (currentSearchMode === 'name') {
+        // Match only file/folder name (li text content)
+        match = text.includes(q);
+      } else if (currentSearchMode === 'content') {
+        // Match only in SEARCH_INDEX content (tags + preview)
         const link = li.querySelector('a');
         if (link) {
           const href = link.getAttribute('href') || '';
           const docPath = href.replace('docs/', '').replace('.html', '');
-          for (const item of SEARCH_INDEX) {
-            const itemPath = item.path.replace(/[/\\]/g, '_');
-            if (itemPath === docPath || itemPath + '.html' === docPath + '.html') {
-              const tagText = (item.tags || []).join(' ').toLowerCase();
-              const previewText = (item.preview || '').toLowerCase();
-              if (tagText.includes(q) || previewText.includes(q)) {
-                match = true;
-              }
-              break;
-            }
+          const idxEntry = pathToSearchIndex[docPath];
+          if (idxEntry) {
+            contentCount = countContentMatches(idxEntry, q);
+            match = contentCount > 0;
           }
         }
+        // Also check folder name
+        if (!match && li.classList.contains('tree-folder')) {
+          match = text.includes(q);
+        }
+      } else {
+        // 'both' mode: OR of name and content
+        const nameMatch = text.includes(q);
+        const link = li.querySelector('a');
+        if (link) {
+          const href = link.getAttribute('href') || '';
+          const docPath = href.replace('docs/', '').replace('.html', '');
+          const idxEntry = pathToSearchIndex[docPath];
+          if (idxEntry) {
+            contentCount = countContentMatches(idxEntry, q);
+          }
+        }
+        match = nameMatch || contentCount > 0;
       }
-      
+
       li.style.display = match ? '' : 'none';
-      if (match) visibleCount++;
+      if (match) {
+        visibleCount++;
+        // Show match count badge for content matches
+        const existingBadge = li.querySelector('.match-count-badge');
+        if (contentCount > 0) {
+          if (!existingBadge) {
+            const badge = document.createElement('span');
+            badge.className = 'match-count-badge';
+            badge.style.cssText = 'display:inline-block;font-size:0.7em;background:#1a73e8;color:white;border-radius:8px;padding:0 5px;margin-left:4px;font-weight:600;';
+            badge.textContent = `×${contentCount}`;
+            // Insert after the file link or name
+            const link = li.querySelector('a');
+            if (link) {
+              link.after(badge);
+            } else {
+              li.appendChild(badge);
+            }
+          }
+        } else if (existingBadge) {
+          existingBadge.remove();
+        }
+      }
     });
 
     // Show folders containing matched files (even if folder name doesn't match)
@@ -490,6 +629,18 @@ function collapseAllFolders() {
       });
     }
 
+    // Update match count display
+    if (matchCountEl) {
+      if (q) {
+        const lang = document.documentElement.getAttribute('data-lang') || 'en';
+        matchCountEl.textContent = lang === 'zh'
+          ? `找到 ${visibleCount} 个匹配文件`
+          : `Found ${visibleCount} matching files`;
+      } else {
+        matchCountEl.textContent = '';
+      }
+    }
+
     // Update info card
     if (splitModeInfo) {
       const tip = splitModeInfo.querySelector('.tip');
@@ -504,9 +655,7 @@ function collapseAllFolders() {
             ? `✅ 找到 ${visibleCount} 个匹配文件`
             : `✅ Found ${visibleCount} matching files`;
         } else {
-          tip.innerHTML = lang === 'zh'
-            ? '💡 点击文件树中的文件名可在新标签页中打开子页面'
-            : '💡 Click file names in the tree to open subpages';
+          tip.innerHTML = '';
         }
       }
     }
@@ -530,6 +679,23 @@ function collapseAllFolders() {
 
   searchInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') filterSplitMode(this.value);
+  });
+
+  // ── Global keyboard shortcuts ──
+  document.addEventListener('keydown', function(e) {
+    // '/' to focus search (only when not already in an input)
+    if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+    // 'Escape' to clear search and blur
+    if (e.key === 'Escape' && document.activeElement === searchInput) {
+      searchInput.value = '';
+      filterSplitMode('');
+      cloudTags.forEach(t => t.classList.remove('active'));
+      searchInput.blur();
+    }
   });
 })();
 </script>

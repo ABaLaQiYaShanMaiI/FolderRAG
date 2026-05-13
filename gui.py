@@ -656,6 +656,13 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         tk.Label(pr1, text=self.tr('out_dir'), font=('Segoe UI', 10),
                  bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
         self.pout_var = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_portal"))
+        self._pout_auto = True  # Auto-name from source folder
+        self._pout_updating = False  # Guard to prevent re-entrant auto-update
+        # Detect manual edits to portal output path
+        def _trace_pout(*a):
+            if not self._pout_updating:
+                self._pout_auto = False
+        self.pout_var.trace_add('write', _trace_pout)
         ttk.Entry(pr1, textvariable=self.pout_var, font=('Segoe UI', 9)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 4))
         pout_btn = tk.Button(pr1, text=self.tr('browse'), font=('Segoe UI', 9),
                              bg=self.COLORS['primary'], fg='white', relief='flat',
@@ -899,7 +906,16 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self.dot.delete('all')
             self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['warning'], outline='')
 
-        self.fname_var.set(f"{os.path.basename(os.path.normpath(self.current_folder))}_export")
+        # Auto-name TXT output from source folder
+        folder_basename = os.path.basename(os.path.normpath(self.current_folder))
+        self.fname_var.set(f"{folder_basename}_export")
+
+        # Auto-name portal output directory from source folder (only if user hasn't manually changed it)
+        if hasattr(self, '_pout_auto') and self._pout_auto:
+            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+            self._pout_updating = True  # Prevent trace from disabling auto-mode
+            self.pout_var.set(os.path.join(desktop, f"{folder_basename}_portal"))
+            self._pout_updating = False
 
     def _update_tree(self):
         for item in self.tree.get_children():
