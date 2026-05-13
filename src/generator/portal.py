@@ -596,7 +596,6 @@ def generate_portal_split(
     docs_texts.sort(key=lambda d: d.get("title", "").lower())
 
     # ── Build index page ──
-    parsed_paths = {d["file"] for d in docs_meta if not d.get("skipped")}
     file_tree_html = build_file_tree_split_html(folder_path, docs_texts) if include_skipped else ""
     
     # Build search index JSON
@@ -662,10 +661,3 @@ def _path_to_subpage_filename(rel_path: str) -> str:
     safe = safe.replace(' ', '_').replace('#', '_').replace('?', '_')
     safe = safe.replace('%', '_').replace('&', '_').replace('=', '_')
     return safe + '.html'
-
-
-def _get_file_type(filename: str) -> str:
-    """Determine file type from extension."""
-    from src.constants import FILE_TYPE_MAP
-    ext = os.path.splitext(filename)[1].lower()
-    return FILE_TYPE_MAP.get(ext, ext.upper().lstrip('.').replace('.', '') if ext else 'Unknown')

@@ -5,7 +5,6 @@ Generates single-page knowledge portal with collapsible file contents.
 """
 
 import os
-import json
 import string
 import base64
 from html import escape
