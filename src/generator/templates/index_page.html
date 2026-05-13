@@ -144,6 +144,12 @@
   .tree-file.tree-readme a { color: #1b8a3d; font-weight: 600; }
   .tree-file.tree-readme a::before { content: "⭐ "; }
   .tree-size { color: #999; font-size: 0.9em; margin-left: 4px; font-family: 'Segoe UI', Arial, sans-serif; }
+
+  /* Match count badge for content search results */
+  .match-count-badge {
+    display: inline-block; font-size: 0.7em; background: #1a73e8; color: white;
+    border-radius: 8px; padding: 0 5px; margin-left: 4px; font-weight: 600;
+  }
   
   /* Collapsible folder children */
   .folder-children { list-style: none; padding: 0; margin: 0; overflow: hidden; transition: max-height 0.2s ease; }
@@ -228,6 +234,11 @@
     .footer { border-top-color: #333; color: #666; }
     .tree-toggle-all { background: #2a2a4e; border-color: #444; color: #64b5f6; }
     .tree-toggle-all:hover { background: #3a3a5e; }
+    .search-mode-btn { background: #2a2a4e; border-color: #444; color: #aaa; }
+    .search-mode-btn:hover { background: #3a3a5e; border-color: #64b5f6; }
+    .search-mode-btn.active { background: #64b5f6; color: #16213e; border-color: #64b5f6; }
+    .search-match-count { color: #64b5f6; }
+    .match-count-badge { background: #64b5f6 !important; color: #16213e !important; }
   }
 
   @media print {
@@ -590,7 +601,6 @@ function setSearchMode(mode) {
           if (!existingBadge) {
             const badge = document.createElement('span');
             badge.className = 'match-count-badge';
-            badge.style.cssText = 'display:inline-block;font-size:0.7em;background:#1a73e8;color:white;border-radius:8px;padding:0 5px;margin-left:4px;font-weight:600;';
             badge.textContent = `×${contentCount}`;
             // Insert after the file link or name
             const link = li.querySelector('a');
