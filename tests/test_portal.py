@@ -84,7 +84,7 @@ def test_generate_portal_with_text_file():
         assert result["index_file"] is not None
         assert os.path.exists(result["index_file"])
 
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
         assert "test_doc.txt" in content
         assert "This is a test document for portal generation." in content
@@ -162,7 +162,7 @@ def test_doc_content_always_visible():
         )
 
         assert result["index_file"] is not None
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
 
         assert 'style="display:none"' not in content, \
@@ -193,7 +193,7 @@ def test_each_file_block_has_copy_button():
         )
 
         assert result["index_file"] is not None
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
 
         copy_btn_count = content.count('class="copy-file-btn"')
@@ -232,7 +232,7 @@ def test_copy_button_calls_copy_function():
         )
 
         assert result["index_file"] is not None
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
 
         assert 'onclick="copyFileContent(this)"' in content, \
@@ -262,7 +262,7 @@ def test_no_sr_only_block_in_portal():
         )
 
         assert result["index_file"] is not None
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
 
         assert "KNOWLEDGE PORTAL" not in content, \
@@ -294,7 +294,7 @@ def test_portal_uses_minimal_font_and_compact_layout():
         )
 
         assert result["index_file"] is not None
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
 
         assert "font-size: 3px" in content or "font-size:3px" in content, \
@@ -344,7 +344,7 @@ def test_skipped_files_do_not_generate_pages():
         assert not os.path.isdir(docs_dir), "docs/ directory should NOT exist (single-page portal)"
 
         assert result["index_file"] and os.path.exists(result["index_file"])
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
 
         import re
@@ -375,7 +375,7 @@ def test_skipped_files_appear_in_file_tree():
 
         index_path = result["index_file"]
         assert index_path and os.path.exists(index_path)
-        with open(index_path, "r", encoding="utf-8") as f:
+        with open(index_path, encoding="utf-8") as f:
             content = f.read()
 
         assert "notes.bin" in content, "Skipped file 'notes.bin' should appear in file tree"
@@ -397,7 +397,7 @@ def test_skipped_files_excluded_from_file_tree_when_disabled():
         )
 
         if result["index_file"]:
-            with open(result["index_file"], "r", encoding="utf-8") as f:
+            with open(result["index_file"], encoding="utf-8") as f:
                 content = f.read()
             assert "notes.bin" not in content, \
                 "Skipped file should not appear in index when include_skipped=False"
@@ -482,7 +482,7 @@ def test_generate_portal_split_index_has_no_file_contents():
         )
 
         assert result["index_file"] is not None
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             index_content = f.read()
 
         import re
@@ -535,7 +535,7 @@ def test_generate_portal_split_subpages_have_correct_content():
             assert os.path.isfile(subpage_path), \
                 f"Subpage not found for {rel_path}: expected {subpage_path}"
 
-            with open(subpage_path, "r", encoding="utf-8") as f:
+            with open(subpage_path, encoding="utf-8") as f:
                 subpage_content = f.read()
 
             if rel_path == "readme.txt":
@@ -579,7 +579,7 @@ def test_generate_portal_split_search_count_in_tip():
         )
 
         assert result["index_file"] is not None
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
 
         assert '.tip' in content or 'class="tip"' in content, \
@@ -670,7 +670,7 @@ def test_generate_portal_split_tree_links_to_subpages():
         )
 
         assert result["index_file"] is not None
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
 
         assert 'href="docs/' in content, \
@@ -708,7 +708,7 @@ def test_generate_portal_split_skipped_behavior():
             "Skipped file should not have a subpage"
 
         assert result["index_file"] is not None
-        with open(result["index_file"], "r", encoding="utf-8") as f:
+        with open(result["index_file"], encoding="utf-8") as f:
             content = f.read()
         assert "notes.bin" in content, \
             "Skipped file should appear in file tree"

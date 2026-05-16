@@ -19,7 +19,7 @@ def _load_template(name: str) -> str:
         path = os.path.join(_TEMPLATES_DIR, name)
         if not os.path.exists(path):
             raise FileNotFoundError(f"Template not found: {path}")
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             _TEMPLATE_CACHE[name] = f.read()
     return _TEMPLATE_CACHE[name]
 
@@ -61,11 +61,11 @@ def _get_file_type_icon(file_type: str) -> str:
 def build_file_content_blocks(docs_texts: list) -> str:
     """
     Build HTML file blocks for all file contents — always expanded.
-    
+
     Each block has:
       - doc-header: icon, filename, size, tags, copy button (no toggle)
       - doc-content: code preview (always visible, with minimal font for AI density)
-    
+
     Args:
         docs_texts: list of dicts with keys:
             - title: display title / relative path
@@ -74,7 +74,7 @@ def build_file_content_blocks(docs_texts: list) -> str:
             - file_type: file type string
             - size_hr: human-readable size (optional)
             - tags: list of keyword strings (optional)
-    
+
     Returns:
         HTML string with always-expanded file blocks
     """
@@ -86,7 +86,7 @@ def build_file_content_blocks(docs_texts: list) -> str:
         file_type = doc.get("file_type", _get_file_type(title))
         size_hr = doc.get("size_hr", "")
         tags = doc.get("tags", []) or []
-        
+
         escaped_title = escape(title)
         escaped_text = escape(text)
         size_str = f"{size:,}" if size else "0"
@@ -94,20 +94,20 @@ def build_file_content_blocks(docs_texts: list) -> str:
         # Base64 encode the filename to avoid CSS selector escaping issues
         # with special characters like &, ", ', etc.
         safe_filename_b64 = base64.b64encode(title.replace('\\', '/').encode('utf-8')).decode('ascii')
-        
+
         # Build pre-computed search index (lowercase title + tags for fast JS filtering)
         search_index = (title.lower() + ' ' + ' '.join(t.lower() for t in tags)).strip()
         safe_search_index = escape(search_index)
-        
+
         # Build tags string
         tags_html = ""
         for tag in tags[:5]:
             safe_tag = escape(tag)
             tags_html += f'<span class="file-tag">{safe_tag}</span>'
-        
+
         # File type icon
         type_icon = _get_file_type_icon(file_type)
-        
+
         # Build the file block with header + always-visible content + copy button
         # Content area always visible (no display:none), toggles are removed
         block = (
@@ -126,7 +126,7 @@ def build_file_content_blocks(docs_texts: list) -> str:
             f'</div>'
         )
         parts.append(block)
-    
+
     return "\n".join(parts)
 
 
@@ -138,7 +138,7 @@ def build_ai_raw_text_block(
 ) -> str:
     """
     Build a hidden AI-readable plain-text block containing all file contents.
-    
+
     This produces a pure-text representation of all files, separated by
     ASCII dividers, wrapped in a <pre> tag. It is placed in the HTML with
     'position: absolute; left: -9999px' so that:
@@ -146,7 +146,7 @@ def build_ai_raw_text_block(
       - Screen readers skip it (via aria-hidden="true")
       - AI text extractors (Edge Copilot, ChatGPT, etc.) can read the full
         content because they check 'display' property, not visual position
-    
+
     Args:
         docs_texts: list of dicts with keys:
             - title: display title / relative path
@@ -156,13 +156,13 @@ def build_ai_raw_text_block(
         folder_name: Source folder name
         total_chars: Total character count across all files
         generated_at: Timestamp string
-    
+
     Returns:
         HTML string: a <pre> block containing all file texts in plain text
         format, already HTML-escaped and ready for template insertion.
     """
     lines = []
-    
+
     # ── Header / metadata block ──
     lines.append("=" * 80)
     lines.append("  KNOWLEDGE PORTAL — AI-READABLE TEXT EXTRACT")
@@ -173,37 +173,37 @@ def build_ai_raw_text_block(
     lines.append(f"  Generated at  : {generated_at}")
     lines.append("=" * 80)
     lines.append("")
-    
+
     # ── Each file ──
     for i, doc in enumerate(docs_texts):
         title = doc.get("title", f"file_{i}")
         text = doc.get("text", "")
         size = doc.get("size", 0)
         size_hr = doc.get("size_hr", "")
-        
+
         # File header separator
         lines.append("-" * 80)
         lines.append(f"  FILE: {title}")
         lines.append(f"  Size: {size_hr}  |  {size:,} characters")
         lines.append("-" * 80)
         lines.append("")
-        
+
         # The actual file content — keep as-is (will be HTML-escaped once as a whole)
         lines.append(text)
-        
+
         # Trailing newline before next file
         lines.append("")
-    
+
     # Footer
     lines.append("=" * 80)
     lines.append("  END OF AI-READABLE TEXT EXTRACT")
     lines.append("=" * 80)
-    
+
     raw_text = "\n".join(lines)
-    
+
     # HTML-escape the entire block and wrap in <pre> tags for formatting preservation
     escaped_raw_text = escape(raw_text)
-    
+
     return f"<pre>{escaped_raw_text}</pre>"
 
 
@@ -218,7 +218,7 @@ def _format_total_size(docs_meta: list) -> str:
 
 def _path_to_subpage_filename(rel_path: str) -> str:
     """Convert a file's relative path into a safe HTML filename for the subpage.
-    
+
     Examples:
         src/parser/text_parser.py → src_parser_text_parser.html
         README.md → README.html
@@ -236,27 +236,27 @@ def build_subpage_html(
     language: str = "en",
 ) -> str:
     """Generate a standalone HTML subpage for a single file.
-    
+
     Args:
         doc: Dict with keys: title, text, size, size_hr, file_type, tags
         folder_name: Project/source folder name
         language: Language code ('en' or 'zh')
-    
+
     Returns:
         Complete HTML string for the subpage
     """
     template = _load_template("subpage.html")
-    
+
     title = doc.get("title", "unknown")
     text = doc.get("text", "")
     size = doc.get("size", 0)
     size_hr = doc.get("size_hr", "")
     tags = doc.get("tags", []) or []
-    
+
     escaped_title = escape(title)
     escaped_text = escape(text)
     escaped_folder = escape(folder_name)
-    
+
     # Build i18n text
     if language == "zh":
         back_text = "返回索引"
@@ -272,7 +272,7 @@ def build_subpage_html(
         size_text = "Size"
         chars_text = "Chars"
         generated_by_text = "Generated by"
-    
+
     # Build tags HTML for meta line
     meta_tags_html = ""
     for tag in tags[:5]:
@@ -280,7 +280,7 @@ def build_subpage_html(
         meta_tags_html += f'<span class="file-tag" style="background:#e8f0fe;color:#1a73e8;border-radius:6px;padding:1px 6px;font-size:0.85em;">{safe_tag}</span>'
     if meta_tags_html:
         meta_tags_html = f'<span>🏷️ {meta_tags_html}</span>'
-    
+
     tpl = string.Template(template)
     result = tpl.safe_substitute({
         "escaped_title": escaped_title,
@@ -301,25 +301,25 @@ def build_subpage_html(
 
 def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
     """Build a collapsible file tree where each file links to its subpage.
-    
+
     Features:
     - Folders are clickable to collapse/expand their children
     - Toggle icons (▶/▼) show current state
     - "Expand All / Collapse All" buttons at the top
     - Each file links to its subpage in docs/ directory
-    
+
     Args:
         folder_path: Root folder to scan
         parsed_docs: List of parsed doc dicts with 'title' (rel_path) key
-    
+
     Returns:
         HTML string for the collapsible file tree
     """
     from src.constants import FILTER_DIRS as _FILTER_DIRS
     from src.constants import should_filter_file as _should_filter_file
-    
+
     parsed_paths = {d.get("title", "") for d in parsed_docs}
-    
+
     def walk(dirpath, prefix=""):
         """Recursively build tree items. Returns list of HTML lines."""
         items = []
@@ -327,12 +327,12 @@ def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
             names = sorted(os.listdir(dirpath), key=str.lower)
         except PermissionError:
             return []
-        
+
         root_for_rel = folder_path
         for name in names:
             full_path = os.path.join(dirpath, name)
             rel_path = os.path.relpath(full_path, root_for_rel)
-            
+
             if os.path.isdir(full_path):
                 if name in _FILTER_DIRS or name.startswith('.'):
                     continue
@@ -341,17 +341,17 @@ def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
                 if _should_filter_file(rel_path):
                     continue
                 items.append(('file', name, full_path, rel_path))
-        
+
         dirs = [(n, f, r) for t, n, f, r in items if t == 'dir']
         files = [(n, f, r) for t, n, f, r in items if t == 'file']
         all_items = dirs + files
-        
+
         result = []
         for idx, (name, full_path, rel_path) in enumerate(all_items):
             is_last = (idx == len(all_items) - 1)
             connector = '└──' if is_last else '├──'
             child_prefix = prefix + ('    ' if is_last else '│   ')
-            
+
             if os.path.isdir(full_path):
                 # Build children recursively
                 children = walk(full_path, child_prefix)
@@ -360,7 +360,7 @@ def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
                     f'  {chr(10).join(children)}'
                     f'</ul>'
                 ) if children else ''
-                
+
                 result.append(
                     f'<li class="tree-folder" onclick="toggleFolder(this)">'
                     f'<span class="tree-prefix">{prefix}{connector}</span>'
@@ -373,18 +373,18 @@ def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
                 size = os.path.getsize(full_path)
                 size_hr = human_readable_size(size)
                 is_parsed = rel_path in parsed_paths
-                
+
                 subpage_name = _path_to_subpage_filename(rel_path)
-                
+
                 if is_parsed:
                     link_html = f'<a href="docs/{subpage_name}" target="_blank" onclick="event.stopPropagation()">📄 {name}</a>'
                 else:
                     link_html = f'<span class="unparsed">⏭️ {name}</span>'
-                
+
                 css_class = 'tree-file'
                 if not is_parsed:
                     css_class += ' skipped'
-                
+
                 result.append(
                     f'<li class="{css_class}">'
                     f'<span class="tree-prefix">{prefix}{connector}</span>'
@@ -392,42 +392,42 @@ def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
                     f'<span class="tree-size"> {size_hr}</span>'
                     f'</li>'
                 )
-        
+
         return result
-    
+
     lines = walk(folder_path)
     return '\n'.join(lines)
 
 
 def build_search_index_json(docs_texts: list) -> str:
     """Build a lightweight JSON array for client-side search indexing.
-    
+
     Each entry contains: path, name, tags, preview (first 300 chars).
     The 'text' field is intentionally omitted — the index is embedded in the
     HTML page and would bloat memory with full file contents. For large
     document sets, consider loading the index dynamically from an external
     JSON file instead.
-    
+
     Args:
         docs_texts: List of doc dicts with keys: title, text, tags
-    
+
     Returns:
         JSON string for embedding in <script> tag
     """
     import json
-    
+
     index_data = []
     for doc in docs_texts:
         title = doc.get("title", "")
         text = doc.get("text", "")
         tags = doc.get("tags", []) or []
-        
+
         # Get just the filename from the path
         name = os.path.basename(title.replace('\\', '/'))
-        
+
         # Preview: first 300 chars for search context
         preview = text[:300].replace('\n', ' ').strip()
-        
+
         index_data.append({
             "path": title,
             "name": name,
@@ -437,7 +437,7 @@ def build_search_index_json(docs_texts: list) -> str:
             # The client-side tree-item search matches on 'name', 'tags',
             # and 'preview' fields, which provides sufficient accuracy.
         })
-    
+
     return json.dumps(index_data, ensure_ascii=False)
 
 
@@ -452,7 +452,7 @@ def wrap_index_html(
     language: str = "en",
 ) -> str:
     """Wrap index page with all portal content.
-    
+
     Note: The 'ai_raw_text_html' parameter has been removed because all
     file content is now always expanded in the DOM. The sr-only block
     is no longer needed.

@@ -168,6 +168,7 @@ def build_html_from_files(
     output_path: str,
     include_skipped: bool = True,
     language: str = "en",
+    verbose: bool = True,
 ) -> tuple:
     """
     Parse files and generate complete HTML content (no truncation).
@@ -200,7 +201,7 @@ def build_html_from_files(
 
         try:
             if not HAS_PARSER:
-                with open(finfo['path'], 'r', encoding='utf-8', errors='replace') as f:
+                with open(finfo['path'], encoding='utf-8', errors='replace') as f:
                     text = f.read()
             else:
                 result = parse_file(finfo['path'])
@@ -234,12 +235,12 @@ def build_html_from_files(
             error_count += 1
             continue
 
-    # Print skip reasons to console
-    if skip_by_reason:
+    # Print skip reasons to console (only in verbose mode)
+    if verbose and skip_by_reason:
         print(f"[Skip Summary] {skipped_count} files skipped:")
         for reason, count in sorted(skip_by_reason.items(), key=lambda x: -x[1]):
             print(f"  - {count} file(s): {reason}")
-    if error_count:
+    if verbose and error_count:
         print(f"[Error Summary] {error_count} file(s) failed to parse")
 
     articles_html = "\n".join(articles)
@@ -337,7 +338,7 @@ def build_text_from_files(
                     continue
                 text = (result.get("text") or "").strip()
             else:
-                with open(finfo['path'], 'r', encoding='utf-8', errors='replace') as f:
+                with open(finfo['path'], encoding='utf-8', errors='replace') as f:
                     text = f.read()
 
             if not text:
@@ -379,9 +380,10 @@ def build_markdown_from_files(
     file_list: list,
     include_skipped: bool = False,
     language: str = "en",
+    verbose: bool = True,
 ) -> tuple:
     """Generate Markdown output from parsed files.
-    
+
     Each file is wrapped in a Markdown section with metadata.
     Suitable for AI reading and Obsidian integration.
 
@@ -398,18 +400,14 @@ def build_markdown_from_files(
     if language == "zh":
         label_size = "文件大小"
         label_chars = "字符数"
-        label_format = "格式"
         label_unsupported = "不支持的格式"
-        label_skipped = "已跳过"
         label_source = "文件夹名"
         label_files = "解析文件数"
         label_total_chars = "总字符数"
     else:
         label_size = "File size"
         label_chars = "Characters"
-        label_format = "Format"
         label_unsupported = "Unsupported format"
-        label_skipped = "Skipped"
         label_source = "Source folder"
         label_files = "Files parsed"
         label_total_chars = "Total characters"
@@ -438,7 +436,7 @@ def build_markdown_from_files(
                     continue
                 text = (result.get("text") or "").strip()
             else:
-                with open(finfo['path'], 'r', encoding='utf-8', errors='replace') as f:
+                with open(finfo['path'], encoding='utf-8', errors='replace') as f:
                     text = f.read()
 
             if not text:
@@ -470,12 +468,12 @@ def build_markdown_from_files(
             error_count += 1
             continue
 
-    # Print skip reasons to console
-    if skip_by_reason:
+    # Print skip reasons to console (only in verbose mode)
+    if verbose and skip_by_reason:
         print(f"[Skip Summary] {skipped_count} files skipped:")
         for reason, count in sorted(skip_by_reason.items(), key=lambda x: -x[1]):
             print(f"  - {count} file(s): {reason}")
-    if error_count:
+    if verbose and error_count:
         print(f"[Error Summary] {error_count} file(s) failed to parse")
 
     folder_name = os.path.basename(os.path.abspath(folder_path))

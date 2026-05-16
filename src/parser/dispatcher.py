@@ -87,7 +87,7 @@ def _should_try_text_fallback(filepath: str) -> bool:
 
 def parse_file(filepath, **kwargs):
     """Dispatch a file to the appropriate parser based on MIME type.
-    
+
     Args:
         filepath: Path to the file to parse.
         **kwargs: Additional arguments passed to parse_office() when applicable.
@@ -97,21 +97,21 @@ def parse_file(filepath, **kwargs):
             - annotate_styles: bool
             - extract_ppt_notes: bool
             - max_rows_xlsx: int
-    
+
     Returns:
         Dict with keys: extract_type, text, metadata
         Or None if file cannot be parsed.
     """
     if not os.path.isfile(filepath):
         return None
-    
+
     ext = os.path.splitext(filepath)[1].lower()
-    
+
     # Skip known binary files early
     if ext in _KNOWN_BINARY_EXTS:
         logger.debug("Skipping known binary file: %s", filepath)
         return None
-    
+
     # Try MIME-based dispatch (gracefully handle missing or broken python-magic).
     mime = None
     if _magic is not None:
@@ -155,7 +155,7 @@ def parse_file(filepath, **kwargs):
         ]:
             filetype = "xls" if mime == "application/vnd.ms-excel" else "xlsx"
             return parse_office(filepath, filetype, **office_kwargs)
-    
+
     # Extension-based dispatch for formats python-magic may not identify
     # This handles legacy formats (.doc, .ppt, .xls) when magic is unavailable,
     # WPS-specific formats (.wps, .et, .dps),
@@ -184,5 +184,5 @@ def parse_file(filepath, **kwargs):
                 return result
         except Exception as e:
             logger.debug("Text fallback failed for %s: %s", filepath, e)
-    
+
     return None

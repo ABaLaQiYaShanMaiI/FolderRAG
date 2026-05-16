@@ -28,6 +28,7 @@ from src.generator.templates import (
     wrap_index_html,
     build_file_content_blocks,
     _get_file_type,
+    _path_to_subpage_filename,
 )
 from src.utils import human_readable_size
 
@@ -123,7 +124,7 @@ def escape_html(s: str) -> str:
 
 def build_file_tree_html(folder_path: str, parsed_files: set = None) -> str:
     """Build an ASCII-tree diagram of the folder structure.
-    
+
     Args:
         folder_path: Root folder to scan
         parsed_files: Set of relative paths that were successfully parsed.
@@ -216,7 +217,7 @@ def generate_portal(
     max_chars_per_file: int = _DEFAULT_MAX_CHARS_PER_FILE,
 ) -> dict:
     """Generate single-page knowledge portal with all file contents.
-    
+
     Args:
         folder_path: Root folder to scan.
         output_dir: Output directory for generated portal.
@@ -227,7 +228,7 @@ def generate_portal(
                             Set to 0 or None for no limit.
     """
     if not os.path.isdir(folder_path):
-        raise ValueError("Not a valid folder: %s" % folder_path)
+        raise ValueError("Not a valid folder: {}".format(folder_path))
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -292,7 +293,7 @@ def generate_portal(
         except Exception as e:
             logger.exception("Error parsing %s: %s", rel_path, e)
             if show_progress:
-                print("\n  [Error] %s - %s" % (rel_path, e))
+                print("\n  [Error] {} - {}".format(rel_path, e))
             error_count += 1
             continue
 
@@ -375,7 +376,7 @@ def generate_portal(
     parsed_paths = {d["file"] for d in docs_meta if not d.get("skipped")}
     file_tree_html = build_file_tree_html(folder_path, parsed_files=parsed_paths) if include_skipped else ""
     file_contents_html = build_file_content_blocks(docs_texts)
-    
+
     if docs_meta or file_tree_html:
         index_html = wrap_index_html(
             docs_meta=docs_meta,
@@ -417,11 +418,11 @@ def generate_portal_split(
     max_chars_per_file: int = _DEFAULT_MAX_CHARS_PER_FILE,
 ) -> dict:
     """Generate a split-file knowledge portal with index page + individual subpages.
-    
+
     Produces:
         output_dir/index.html          - Main index page with file tree, search, stats
         output_dir/docs/*.html         - Individual file subpages
-    
+
     Args:
         folder_path: Root folder to scan.
         output_dir: Output directory for generated portal.
@@ -429,7 +430,7 @@ def generate_portal_split(
         show_progress: Whether to print progress to console.
         language: Language code ('en' or 'zh').
         max_chars_per_file: Maximum characters per file before truncation.
-    
+
     Returns:
         dict with keys: doc_count, total_chars, skipped, errors, output_dir, index_file, folder_name
     """
@@ -439,9 +440,9 @@ def generate_portal_split(
         build_search_index_json,
         wrap_index_html,
     )
-    
+
     if not os.path.isdir(folder_path):
-        raise ValueError("Not a valid folder: %s" % folder_path)
+        raise ValueError("Not a valid folder: {}".format(folder_path))
 
     os.makedirs(output_dir, exist_ok=True)
     docs_dir = os.path.join(output_dir, "docs")
@@ -508,7 +509,7 @@ def generate_portal_split(
         except Exception as e:
             logger.exception("Error parsing %s: %s", rel_path, e)
             if show_progress:
-                print("\n  [Error] %s - %s" % (rel_path, e))
+                print("\n  [Error] {} - {}".format(rel_path, e))
             error_count += 1
             continue
 
@@ -597,10 +598,10 @@ def generate_portal_split(
 
     # ── Build index page ──
     file_tree_html = build_file_tree_split_html(folder_path, docs_texts) if include_skipped else ""
-    
+
     # Build search index JSON
     search_index_json = build_search_index_json(docs_texts)
-    
+
     # Build index page (no file contents, just tree + search)
     index_html = wrap_index_html(
         docs_meta=docs_meta,
@@ -612,7 +613,7 @@ def generate_portal_split(
         file_contents_html="",  # No embedded content in split mode
         language=language,
     )
-    
+
     # Inject search index JSON into the index page before closing </body>
     # The template's built-in split-mode JS already handles search filtering
     # and tag cloud interaction. We only need to provide the SEARCH_INDEX data
@@ -625,7 +626,7 @@ def generate_portal_split(
         f'const SEARCH_INDEX = {search_index_json};\n'
         f'</script>\n'
     )
-    
+
     # Insert search script before </body>
     index_html = index_html.replace('</body>', search_script + '\n</body>')
 
@@ -648,16 +649,3 @@ def generate_portal_split(
         "index_file": index_path,
         "folder_name": folder_name,
     }
-
-
-def _path_to_subpage_filename(rel_path: str) -> str:
-    """Convert a file's relative path into a safe HTML filename for the subpage.
-    
-    Examples:
-        src/parser/text_parser.py → src_parser_text_parser.html
-        README.md → README.html
-    """
-    safe = rel_path.replace('\\', '/').replace('/', '_')
-    safe = safe.replace(' ', '_').replace('#', '_').replace('?', '_')
-    safe = safe.replace('%', '_').replace('&', '_').replace('=', '_')
-    return safe + '.html'

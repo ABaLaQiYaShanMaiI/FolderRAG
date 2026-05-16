@@ -82,7 +82,7 @@ class TestTextExportMode:
         assert "OK" in stdout, f"Unexpected stdout: {stdout}"
 
         # Verify plain text structure (TXT mode)
-        with open(output, "r", encoding="utf-8") as f:
+        with open(output, encoding="utf-8") as f:
             content = f.read()
         # TXT mode uses file: headers
         assert "hello.txt" in content
@@ -108,7 +108,7 @@ class TestTextExportMode:
         assert rc == 0, f"Expected exit code 0, got {rc}. stderr: {stderr}"
         assert os.path.exists(output)
 
-        with open(output, "r", encoding="utf-8") as f:
+        with open(output, encoding="utf-8") as f:
             content = f.read()
         # Must NOT be truncated (old behavior would have ~20 chars)
         assert len(content) > 100, f"Expected full content (>100 chars), got {len(content)}"
@@ -172,7 +172,7 @@ class TestChunkedMode:
         for fname in os.listdir(output_dir):
             if fname.startswith("part_") and fname.endswith(".txt"):
                 fpath = os.path.join(output_dir, fname)
-                with open(fpath, "r", encoding="utf-8") as f:
+                with open(fpath, encoding="utf-8") as f:
                     total_chars += len(f.read())
         # Allow some overhead for separators, but should be small
         assert total_chars < 500, f"Expected total < 500 chars with --max-chars=100, got {total_chars}"
@@ -236,7 +236,7 @@ class TestPortalMode:
 
         # Verify index.html structure
         index_path = os.path.join(output_dir, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
+        with open(index_path, encoding="utf-8") as f:
             content = f.read()
         assert "FolderKnowledgeSiteGeneratorForAI" in content or "folder-knowledge" in content
         assert "sample_docs" in content
@@ -258,7 +258,7 @@ class TestPortalMode:
         # All content is in index.html
         index_path = os.path.join(output_dir, "index.html")
         assert os.path.isfile(index_path), "index.html should exist"
-        with open(index_path, "r", encoding="utf-8") as f:
+        with open(index_path, encoding="utf-8") as f:
             content = f.read()
         # Verify file contents are embedded directly in index.html
         assert "hello.txt" in content, "hello.txt content should be in index.html"

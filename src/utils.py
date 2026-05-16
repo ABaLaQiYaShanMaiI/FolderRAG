@@ -5,7 +5,7 @@ FolderKnowledgeSiteGeneratorForAI — Shared Utility Functions
 
 def human_readable_size(size_bytes: int) -> str:
     """Convert bytes to human-readable format.
-    
+
     Supports units from B through PB.
     """
     if size_bytes == 0:

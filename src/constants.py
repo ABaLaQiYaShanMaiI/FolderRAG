@@ -195,7 +195,7 @@ def should_filter_dir(dirname: str) -> bool:
 
 def should_filter_file(rel_path: str) -> bool:
     """Return True if a file should be excluded from scanning/portal.
-    
+
     Checks directory part, file name, and file extension.
     rel_path: relative path from root (forward-slash separated).
     """

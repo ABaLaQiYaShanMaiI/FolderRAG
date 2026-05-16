@@ -14,7 +14,7 @@ def _detect_encoding(filepath: str) -> str:
     """
     Detect file encoding. Uses chardet if available, otherwise falls back
     to trying common encodings in order.
-    
+
     Returns the detected encoding name, or None if detection fails.
     """
     if HAS_CHARDET:
@@ -31,7 +31,7 @@ def _detect_encoding(filepath: str) -> str:
             logger.debug("chardet low confidence (%.2f) for %s, falling back", confidence, detected)
         except Exception as e:
             logger.debug("chardet detection failed: %s", e)
-    
+
     # Fallback: try common encodings in order
     return None
 
@@ -44,7 +44,7 @@ def _try_encodings(filepath: str, encodings: list) -> str:
     last_error = None
     for enc in encodings:
         try:
-            with open(filepath, "r", encoding=enc) as f:
+            with open(filepath, encoding=enc) as f:
                 text = f.read()
             logger.debug("Successfully decoded %s with encoding %s", filepath, enc)
             return text
@@ -63,7 +63,7 @@ def parse_text(filepath, mime=None):
         detected_enc = _detect_encoding(filepath)
         if detected_enc:
             try:
-                with open(filepath, "r", encoding=detected_enc) as f:
+                with open(filepath, encoding=detected_enc) as f:
                     text = f.read()
                 return {
                     "extract_type": "text",
@@ -72,7 +72,7 @@ def parse_text(filepath, mime=None):
                 }
             except (UnicodeDecodeError, Exception) as e:
                 logger.debug("chardet encoding %s failed: %s, trying fallbacks", detected_enc, e)
-    
+
     # Step 2: Try common encodings in order (UTF-8 → GBK → Latin-1)
     common_encodings = ["utf-8", "gbk", "latin-1"]
     try:
@@ -84,10 +84,10 @@ def parse_text(filepath, mime=None):
         }
     except Exception:
         pass
-    
+
     # Step 3: All encodings failed — fallback with error replacement
     try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             text = f.read()
         logger.warning("Fallback reading %s with utf-8 replace mode", filepath)
         return {

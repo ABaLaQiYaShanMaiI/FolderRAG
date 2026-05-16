@@ -153,7 +153,12 @@ def _collect_files(folder_path: str, max_chars: int | None = None):
                 if allowed <= 0:
                     limit_reached = True
                     continue
-                text = text[:allowed]
+                # Find nearest newline boundary for cleaner truncation
+                truncated = text[:allowed]
+                last_newline = truncated.rfind('\n')
+                if last_newline > allowed * 0.5:
+                    truncated = truncated[:last_newline]
+                text = truncated
                 limit_reached = True
 
             entries.append({

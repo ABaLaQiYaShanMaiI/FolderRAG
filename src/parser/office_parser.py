@@ -48,7 +48,7 @@ def _find_wps():
         return WPS_PATH
     if sys.platform == 'win32':
         for ver in ['12', '11', '10', '9', '8', '7']:
-            p = r"C:\Program Files (x86)\WPS Office\%s\wps.exe" % ver
+            p = r"C:\Program Files (x86)\WPS Office\{}\wps.exe".format(ver)
             if os.path.isfile(p):
                 logger.debug("Found WPS at: %s", p)
                 return p
@@ -91,7 +91,7 @@ def _convert_via_libreoffice(src_path, target_ext):
 
 def _convert_via_wps(src_path, target_ext):
     """Convert a WPS format file using WPS Office CLI (falls back to LibreOffice).
-    
+
     Note: WPS CLI (/convert) is tried first since it may handle WPS-format files
     (like .wps, .et, .dps) better than LibreOffice. If WPS fails or is unavailable,
     falls back to LibreOffice.
@@ -121,7 +121,7 @@ def _convert_via_wps(src_path, target_ext):
                 logger.warning("Failed to clean up WPS temp dir %s: %s", tmp_dir, e)
     else:
         logger.debug("WPS Office not found for %s", src_path)
-    
+
     # Fall back to LibreOffice if available
     lo_path = _find_libreoffice()
     if lo_path:
@@ -160,8 +160,7 @@ def parse_office(filepath, filetype, include_tables=False, include_headers_foote
             logger.warning("Cannot parse legacy %s file: %s. Install LibreOffice for auto-conversion.",
                            format_name, filepath)
             return {"extract_type": "text",
-                    "text": "[Unsupported legacy format: %s]\n[File: %s]\nConsider converting to %s manually."
-                            % (format_name, os.path.basename(filepath), target_ext.upper()),
+                    "text": "[Unsupported legacy format: {}]\n[File: {}]\nConsider converting to {} manually.".format(format_name, os.path.basename(filepath), target_ext.upper()),
                     "metadata": {"mime": "application/legacy-office", "note": "Legacy format"}}
 
     # Handle WPS formats (.wps, .et, .dps)
@@ -180,8 +179,7 @@ def parse_office(filepath, filetype, include_tables=False, include_headers_foote
             logger.warning("Cannot parse %s file: %s. Install LibreOffice or WPS Office.",
                            format_name, filepath)
             return {"extract_type": "text",
-                    "text": "[Unsupported format: %s]\n[File: %s]\nInstall LibreOffice or WPS Office."
-                            % (format_name, os.path.basename(filepath)),
+                    "text": "[Unsupported format: {}]\n[File: {}]\nInstall LibreOffice or WPS Office.".format(format_name, os.path.basename(filepath)),
                     "metadata": {"mime": "application/wps-office", "note": "WPS format"}}
 
     # Parse the (possibly converted) modern file
@@ -214,9 +212,9 @@ def _get_style_label(paragraph):
         if style and style.name:
             name = style.name
             if name.startswith('Heading') or name.startswith('heading'):
-                return "[%s]" % name
+                return "[{}]".format(name)
             if hasattr(style, 'builtin') and style.builtin and 'heading' in name.lower():
-                return "[%s]" % name
+                return "[{}]".format(name)
     except Exception:
         pass
     return ""
@@ -239,10 +237,10 @@ def _parse_docx(filepath, include_tables=False, include_headers_footers=False,
         if style_label and "Heading" in style_label:
             text_parts.append("")
             text_parts.append("=" * 60)
-            text_parts.append("%s %s" % (style_label, text))
+            text_parts.append("{} {}".format(style_label, text))
             text_parts.append("=" * 60)
         else:
-            text_parts.append("%s%s" % (style_label + " " if style_label else "", text))
+            text_parts.append("{}{}".format(style_label + " " if style_label else "", text))
 
     if include_tables and doc.tables:
         text_parts.append("")
@@ -264,11 +262,11 @@ def _parse_docx(filepath, include_tables=False, include_headers_footers=False,
             if section.header:
                 for para in section.header.paragraphs:
                     if para.text.strip():
-                        text_parts.append("[Header] %s" % para.text.strip())
+                        text_parts.append("[Header] {}".format(para.text.strip()))
             if section.footer:
                 for para in section.footer.paragraphs:
                     if para.text.strip():
-                        text_parts.append("[Footer] %s" % para.text.strip())
+                        text_parts.append("[Footer] {}".format(para.text.strip()))
 
     if include_footnotes:
         try:
@@ -356,7 +354,7 @@ def _parse_xlsx(filepath, max_rows=10000):
         ws = wb[sheet_name]
         text_parts.append("")
         text_parts.append("=" * 60)
-        text_parts.append("Sheet: %s" % sheet_name)
+        text_parts.append("Sheet: {}".format(sheet_name))
         text_parts.append("=" * 60)
         rc = 0
         for row in ws.iter_rows(values_only=True):

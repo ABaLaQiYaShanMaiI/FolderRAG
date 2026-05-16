@@ -1024,15 +1024,13 @@ class FolderKnowledgeSiteGeneratorForAIUI:
     def _update_tree(self):
         for item in self.tree.get_children():
             self.tree.delete(item)
-        sc = 0
         for i, f in enumerate(self.file_list):
             icon = '\U0001f4c4' if f['supported'] else '\u23ed\ufe0f'
             status = 'OK' if f['supported'] else 'Skip'
             tag = ('ok' if f['supported'] else 'skip', 'even' if i % 2 == 0 else 'odd')
             self.tree.insert('', 'end', values=(f"{icon} {f['rel_path']}", f['size_hr'], '-', status), tags=tag)
-            if f['supported']:
-                sc += 1
-        self.footer_var.set(f"{len(self.file_list)} {self.tr('files')} | {sc} {self.tr('parseable')}")
+        supported_count = sum(1 for f in self.file_list if f['supported'])
+        self.footer_var.set(f"{len(self.file_list)} {self.tr('files')} | {supported_count} {self.tr('parseable')}")
 
     def on_mode_change(self):
         mode = self.mode_var.get()
