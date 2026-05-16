@@ -55,6 +55,9 @@ except ImportError:
         '.markdown', '.rst', '.text', '.tsv',
         '.pdf',
         '.docx', '.pptx', '.xlsx',
+        # Legacy Office and WPS formats (handled by office_parser with conversion)
+        '.doc', '.ppt', '.xls',
+        '.wps', '.et', '.dps',
         '.prototxt', '.pbtxt', '.solver', '.trainval', '.test',
         '.cfg',
         '.csproj', '.fsproj', '.vbproj',
@@ -369,3 +372,157 @@ def build_text_from_files(
         f"{'=' * 60}\n\n"
     )
     return header + ''.join(parts), parsed_count, skipped_count, error_count, total_chars
+
+
+def build_markdown_from_files(
+    folder_path: str,
+    file_list: list,
+    include_skipped: bool = False,
+    language: str = "en",
+) -> tuple:
+    """Generate Markdown output from parsed files.
+    
+    Each file is wrapped in a Markdown section with metadata.
+    Suitable for AI reading and Obsidian integration.
+
+    Returns (md_string, parsed_count, skipped_count, error_count, total_chars).
+    """
+    sections = []
+    total_chars = 0
+    parsed_count = 0
+    skipped_count = 0
+    error_count = 0
+    skip_by_reason: dict[str, int] = {}
+
+    # Language-specific labels
+    if language == "zh":
+        label_size = "文件大小"
+        label_chars = "字符数"
+        label_format = "格式"
+        label_unsupported = "不支持的格式"
+        label_skipped = "已跳过"
+        label_source = "文件夹名"
+        label_files = "解析文件数"
+        label_total_chars = "总字符数"
+    else:
+        label_size = "File size"
+        label_chars = "Characters"
+        label_format = "Format"
+        label_unsupported = "Unsupported format"
+        label_skipped = "Skipped"
+        label_source = "Source folder"
+        label_files = "Files parsed"
+        label_total_chars = "Total characters"
+
+    for finfo in file_list:
+        if not finfo['supported']:
+            skipped_count += 1
+            skip_by_reason['unsupported format'] = skip_by_reason.get('unsupported format', 0) + 1
+            if include_skipped:
+                rel_path = finfo['rel_path'].replace('\\', '/')
+                section = (
+                    f"---\n\n"
+                    f"## ⏭️ {rel_path}\n\n"
+                    f"**{label_unsupported}** | **{label_size}**: {finfo['size_hr']}\n\n"
+                    f"> *This file format is not supported.*\n"
+                )
+                sections.append(section)
+            continue
+
+        try:
+            if HAS_PARSER:
+                result = parse_file(finfo['path'])
+                if result is None:
+                    skipped_count += 1
+                    skip_by_reason['parser returned no content'] = skip_by_reason.get('parser returned no content', 0) + 1
+                    continue
+                text = (result.get("text") or "").strip()
+            else:
+                with open(finfo['path'], 'r', encoding='utf-8', errors='replace') as f:
+                    text = f.read()
+
+            if not text:
+                skipped_count += 1
+                skip_by_reason['empty content after parsing'] = skip_by_reason.get('empty content after parsing', 0) + 1
+                continue
+
+            file_chars = len(text)
+            rel_path = finfo['rel_path'].replace('\\', '/')
+            ext = os.path.splitext(finfo['rel_path'])[1].lower()
+
+            # Determine language tag for code block
+            lang_tag = _get_md_lang_tag(ext)
+
+            section = (
+                f"---\n\n"
+                f"## 📄 {rel_path}\n\n"
+                f"**{label_size}**: {finfo['size_hr']}  \n"
+                f"**{label_chars}**: {file_chars:,}\n\n"
+                f"```{lang_tag}\n"
+                f"{text}\n"
+                f"```\n"
+            )
+            sections.append(section)
+            total_chars += len(text)
+            parsed_count += 1
+
+        except Exception:
+            error_count += 1
+            continue
+
+    # Print skip reasons to console
+    if skip_by_reason:
+        print(f"[Skip Summary] {skipped_count} files skipped:")
+        for reason, count in sorted(skip_by_reason.items(), key=lambda x: -x[1]):
+            print(f"  - {count} file(s): {reason}")
+    if error_count:
+        print(f"[Error Summary] {error_count} file(s) failed to parse")
+
+    folder_name = os.path.basename(os.path.abspath(folder_path))
+
+    # Header
+    header = (
+        f"# {label_source}：{folder_name}\n\n"
+        f"**{label_files}**：{parsed_count}，**{label_total_chars}**：{total_chars:,}\n\n"
+        f"---\n\n"
+    )
+
+    return header + ''.join(sections), parsed_count, skipped_count, error_count, total_chars
+
+
+def _get_md_lang_tag(ext: str) -> str:
+    """Map file extension to Markdown code block language tag."""
+    lang_map = {
+        '.py': 'python', '.pyw': 'python',
+        '.js': 'javascript', '.jsx': 'jsx',
+        '.ts': 'typescript', '.tsx': 'tsx',
+        '.html': 'html', '.htm': 'html',
+        '.css': 'css', '.scss': 'scss', '.less': 'less',
+        '.json': 'json',
+        '.xml': 'xml',
+        '.yaml': 'yaml', '.yml': 'yaml',
+        '.toml': 'toml',
+        '.md': 'markdown',
+        '.rst': 'rst',
+        '.sh': 'bash', '.bash': 'bash', '.zsh': 'bash', '.fish': 'fish',
+        '.bat': 'batch', '.cmd': 'batch',
+        '.ps1': 'powershell', '.psm1': 'powershell', '.psd1': 'powershell',
+        '.c': 'c', '.cpp': 'cpp', '.h': 'c', '.hpp': 'cpp',
+        '.cs': 'csharp',
+        '.java': 'java',
+        '.go': 'go',
+        '.rs': 'rust',
+        '.rb': 'ruby',
+        '.php': 'php',
+        '.swift': 'swift',
+        '.kt': 'kotlin', '.kts': 'kotlin',
+        '.sql': 'sql',
+        '.lua': 'lua',
+        '.r': 'r', '.R': 'r',
+        '.dart': 'dart',
+        '.scala': 'scala',
+        '.pl': 'perl', '.pm': 'perl',
+        '.tex': 'latex',
+        '.cfg': 'ini', '.ini': 'ini', '.conf': 'ini',
+    }
+    return lang_map.get(ext, '')

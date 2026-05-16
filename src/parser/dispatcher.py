@@ -47,6 +47,16 @@ except ImportError:
         '.mp3', '.mp4', '.avi', '.mov', '.wav', '.flac',
     })
 
+# Configuration for Office parser behavior
+# These defaults can be overridden via environment variables or direct import.
+# For Chinese writing knowledge bases, tables are filtered by default.
+OFFICE_INCLUDE_TABLES = os.environ.get('OFFICE_INCLUDE_TABLES', '0') == '1'
+OFFICE_INCLUDE_HEADERS_FOOTERS = os.environ.get('OFFICE_INCLUDE_HEADERS_FOOTERS', '0') == '1'
+OFFICE_INCLUDE_FOOTNOTES = os.environ.get('OFFICE_INCLUDE_FOOTNOTES', '0') == '1'
+OFFICE_ANNOTATE_STYLES = os.environ.get('OFFICE_ANNOTATE_STYLES', '1') == '1'
+OFFICE_EXTRACT_PPT_NOTES = os.environ.get('OFFICE_EXTRACT_PPT_NOTES', '0') == '1'
+OFFICE_MAX_ROWS_XLSX = int(os.environ.get('OFFICE_MAX_ROWS_XLSX', '10000'))
+
 
 def _should_try_text_fallback(filepath: str) -> bool:
     """Check if a file should be attempted as text based on extension."""
@@ -75,8 +85,23 @@ def _should_try_text_fallback(filepath: str) -> bool:
     return False
 
 
-def parse_file(filepath):
-    """Dispatch a file to the appropriate parser based on MIME type."""
+def parse_file(filepath, **kwargs):
+    """Dispatch a file to the appropriate parser based on MIME type.
+    
+    Args:
+        filepath: Path to the file to parse.
+        **kwargs: Additional arguments passed to parse_office() when applicable.
+            - include_tables: bool (default from OFFICE_INCLUDE_TABLES env var)
+            - include_headers_footers: bool
+            - include_footnotes: bool
+            - annotate_styles: bool
+            - extract_ppt_notes: bool
+            - max_rows_xlsx: int
+    
+    Returns:
+        Dict with keys: extract_type, text, metadata
+        Or None if file cannot be parsed.
+    """
     if not os.path.isfile(filepath):
         return None
     
@@ -96,6 +121,17 @@ def parse_file(filepath):
             mime = None
             logger.debug("magic.from_file() failed for %s, falling back to extension", filepath)
 
+    # Collect office parser arguments from kwargs + env defaults
+    office_kwargs = {
+        'include_tables': kwargs.get('include_tables', OFFICE_INCLUDE_TABLES),
+        'include_headers_footers': kwargs.get('include_headers_footers', OFFICE_INCLUDE_HEADERS_FOOTERS),
+        'include_footnotes': kwargs.get('include_footnotes', OFFICE_INCLUDE_FOOTNOTES),
+        'annotate_styles': kwargs.get('annotate_styles', OFFICE_ANNOTATE_STYLES),
+        'extract_ppt_notes': kwargs.get('extract_ppt_notes', OFFICE_EXTRACT_PPT_NOTES),
+        'max_rows_xlsx': kwargs.get('max_rows_xlsx', OFFICE_MAX_ROWS_XLSX),
+    }
+
+    # MIME-based dispatch
     if mime:
         if mime.startswith("text/"):
             return parse_text(filepath, mime)
@@ -105,33 +141,37 @@ def parse_file(filepath):
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/msword",
         ]:
-            if mime == "application/msword":
-                logger.warning(
-                    "Legacy .doc format detected: %s. python-docx cannot parse old .doc files. "
-                    "Consider converting to .docx.", filepath
-                )
-            return parse_office(filepath, "docx")
+            filetype = "doc" if mime == "application/msword" else "docx"
+            return parse_office(filepath, filetype, **office_kwargs)
         elif mime in [
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "application/vnd.ms-powerpoint",
         ]:
-            if mime == "application/vnd.ms-powerpoint":
-                logger.warning(
-                    "Legacy .ppt format detected: %s. python-pptx cannot parse old .ppt files. "
-                    "Consider converting to .pptx.", filepath
-                )
-            return parse_office(filepath, "pptx")
+            filetype = "ppt" if mime == "application/vnd.ms-powerpoint" else "pptx"
+            return parse_office(filepath, filetype, **office_kwargs)
         elif mime in [
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.ms-excel",
         ]:
-            if mime == "application/vnd.ms-excel":
-                logger.warning(
-                    "Legacy .xls format detected: %s. openpyxl cannot parse old .xls files. "
-                    "Consider converting to .xlsx.", filepath
-                )
-            return parse_office(filepath, "xlsx")
+            filetype = "xls" if mime == "application/vnd.ms-excel" else "xlsx"
+            return parse_office(filepath, filetype, **office_kwargs)
     
+    # Extension-based dispatch for formats python-magic may not identify
+    # This handles legacy formats (.doc, .ppt, .xls) when magic is unavailable,
+    # WPS-specific formats (.wps, .et, .dps),
+    # and modern Office formats (.docx, .pptx, .xlsx) as a fallback
+    # when python-magic is not available or returns non-standard MIME types.
+    if ext in ('.doc', '.ppt', '.xls', '.wps', '.et', '.dps',
+               '.docx', '.pptx', '.xlsx'):
+        filetype_map = {
+            '.doc': 'doc', '.ppt': 'ppt', '.xls': 'xls',
+            '.wps': 'wps', '.et': 'et', '.dps': 'dps',
+            '.docx': 'docx', '.pptx': 'pptx', '.xlsx': 'xlsx',
+        }
+        ft = filetype_map.get(ext, ext.lstrip('.'))
+        logger.debug("Extension-based Office/WPS dispatch for %s (type=%s)", filepath, ft)
+        return parse_office(filepath, ft, **office_kwargs)
+
     # Extension-based fallback: try to parse as text for known code/text extensions.
     # This handles .cs, .swift, .kt, csproj, sln, xaml, and other code files
     # where magic might return unexpected MIME types (e.g., application/octet-stream)

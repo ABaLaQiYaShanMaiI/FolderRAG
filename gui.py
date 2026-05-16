@@ -20,7 +20,7 @@ try:
 except ImportError:
     HAS_PORTAL = False
 
-from src.gui_scanner import collect_files_info, build_text_from_files
+from src.gui_scanner import collect_files_info, build_text_from_files, build_markdown_from_files
 from src.utils import human_readable_size
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -149,6 +149,9 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.file_list = []
         self.total_size = 0
         self.generating = False
+        self.input_is_file = False
+        self.target_file = None
+        self.output_format = 'txt'  # 'txt' or 'md'
         self.output_path = os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_export.txt")
         # NOTE: max_chars per-file truncation has been REMOVED.
         # TXT mode always outputs complete content.
@@ -161,7 +164,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self._server_root = None
 
         self._load_settings()
-
         self.root.title("FolderKnowledgeSiteGeneratorForAI")
         self.root.geometry("820x720")
         self.root.minsize(700, 600)
@@ -417,7 +419,9 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         """Handle file/folder drag-and-drop.
         
         In Windows, event.data may contain multiple paths wrapped in { } { }.
-        Extracts the first valid folder path and loads it.
+        Extracts the first valid path and loads it.
+        Supports both files and folders: if a single file is dropped,
+        only that file will be processed (not the entire parent folder).
         """
         raw = event.data or ""
         if not raw:
@@ -431,6 +435,10 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         
         for candidate in paths:
             path = candidate.strip().strip('"').strip("'")
+            if os.path.isfile(path):
+                self.path_var.set(path)
+                self.load_path(path)
+                return
             if os.path.isdir(path):
                 self.path_var.set(path)
                 self.load_folder(path)
@@ -443,7 +451,10 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         
         # Fallback: treat entire data as a single path
         path = raw.strip('{}').strip('"')
-        if os.path.isdir(path):
+        if os.path.isfile(path):
+            self.path_var.set(path)
+            self.load_path(path)
+        elif os.path.isdir(path):
             self.path_var.set(path)
             self.load_folder(path)
         else:
@@ -603,16 +614,27 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         r2 = tk.Frame(self.single_f, bg=self.COLORS['card'])
         r2.pack(fill=tk.X, pady=1)
 
-        # Note: max_chars per-file truncation has been REMOVED in traditional TXT mode.
-        # For size-controlled splitting, use the --split-chunks CLI mode.
-
         tk.Label(r2, text=self.tr('fname'), font=('Segoe UI', 10),
                  bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
         self.fname_var = tk.StringVar(value='knowledge_export')
         ttk.Entry(r2, textvariable=self.fname_var, width=16).pack(side=tk.LEFT, padx=(4, 2))
-        tk.Label(r2, text='.txt', font=('Segoe UI', 10, 'bold'),
-                 bg=self.COLORS['card'], fg=self.COLORS['primary']).pack(side=tk.LEFT)
         self.fname_var.trace_add('write', lambda *a: self.update_out_path())
+
+        # Format toggle: TXT / MD
+        tk.Label(r2, text='Format:', font=('Segoe UI', 10),
+                 bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT, padx=(12, 2))
+        self.format_var = tk.StringVar(value='txt')
+        for fmt_val, fmt_txt in [('txt', '.txt'), ('md', '.md')]:
+            rb = tk.Radiobutton(r2, text=fmt_txt, variable=self.format_var, value=fmt_val,
+                                command=self._on_format_change, font=('Segoe UI', 10),
+                                bg=self.COLORS['card'], selectcolor=self.COLORS['card'])
+            rb.pack(side=tk.LEFT, padx=(2, 0))
+        self.format_ext_lbl = tk.Label(r2, text='.txt', font=('Segoe UI', 10, 'bold'),
+                                       bg=self.COLORS['card'], fg=self.COLORS['primary'])
+        self.format_ext_lbl.pack(side=tk.LEFT, padx=(4, 0))
+
+        # Note: max_chars per-file truncation has been REMOVED in traditional TXT mode.
+        # For size-controlled splitting, use the --split-chunks CLI mode.
 
         self.skip_var = tk.BooleanVar(value=True)
         tk.Checkbutton(self.single_f, text=self.tr('show_skip'),
@@ -695,9 +717,15 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self.fname_var.set(os.path.splitext(os.path.basename(fp))[0])
 
     def browse_txt_output(self):
-        fp = filedialog.asksaveasfilename(title="Save TXT", defaultextension=".txt",
-                                           filetypes=[("Text files","*.txt"),("All files","*.*")],
-                                           initialfile=self.fname_var.get()+".txt")
+        fmt = self.format_var.get() if hasattr(self, 'format_var') else 'txt'
+        if fmt == 'md':
+            fp = filedialog.asksaveasfilename(title="Save Markdown", defaultextension=".md",
+                                               filetypes=[("Markdown files","*.md"),("All files","*.*")],
+                                               initialfile=self.fname_var.get()+".md")
+        else:
+            fp = filedialog.asksaveasfilename(title="Save TXT", defaultextension=".txt",
+                                               filetypes=[("Text files","*.txt"),("All files","*.*")],
+                                               initialfile=self.fname_var.get()+".txt")
         if fp:
             self.out_var.set(fp)
             self.fname_var.set(os.path.splitext(os.path.basename(fp))[0])
@@ -838,21 +866,66 @@ class FolderKnowledgeSiteGeneratorForAIUI:
 
     def load_from_path(self):
         path = self.path_var.get().strip().strip('"')
-        if os.path.isdir(path):
+        if os.path.isfile(path):
+            self.load_path(path)
+        elif os.path.isdir(path):
             self.load_folder(path)
         else:
             self.status_var.set(f"Invalid path: {path}")
 
+    def load_path(self, path):
+        """Load a single file (not folder) - only this file will be processed."""
+        if self.generating:
+            return
+        self.input_is_file = True
+        self.target_file = os.path.basename(path)
+        self.current_folder = os.path.dirname(path)
+        
+        # Create a single-file file_list
+        file_size = os.path.getsize(path)
+        ext = os.path.splitext(path)[1].lower()
+        from src.gui_scanner import is_file_supported
+        supported = is_file_supported(path, ext)
+        
+        self.file_list = [{
+            'path': path,
+            'rel_path': self.target_file,
+            'size': file_size,
+            'size_hr': human_readable_size(file_size),
+            'ext': ext,
+            'supported': supported,
+        }]
+        self.total_size = file_size
+        
+        # Update UI
+        self.root.after(0, lambda: self._on_scanned_single(self.file_list, self.total_size))
+
     def browse_folder(self):
-        folder = filedialog.askdirectory(title="Select a folder")
+        # Allow selecting both files and folders
+        from tkinter import filedialog
+        folder = filedialog.askdirectory(title="Select a folder or file (cancel to pick a file)")
         if folder:
             self.path_var.set(folder)
             self.load_folder(folder)
+        else:
+            # User cancelled folder dialog - offer file selection instead
+            file_path = filedialog.askopenfilename(
+                title="Select a file",
+                filetypes=[
+                    ("All supported files", "*.pdf *.docx *.doc *.txt *.md *.html *.py *.js *.ts *.json *.xml *.csv *.yaml *.yml"),
+                    ("All files", "*.*")
+                ]
+            )
+            if file_path:
+                self.path_var.set(file_path)
+                self.load_path(file_path)
 
     def clear_folder(self):
         self.current_folder = None
         self.file_list = []
         self.total_size = 0
+        self.input_is_file = False
+        self.target_file = None
         self.path_var.set('')
         for item in self.tree.get_children():
             self.tree.delete(item)
@@ -887,6 +960,37 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             fl, ts = collect_files_info(folder_path)
             self.root.after(0, lambda: self._on_scanned(fl, ts))
         threading.Thread(target=scan, daemon=True).start()
+
+    def _on_scanned_single(self, file_list, total_size):
+        """Handle scan result for a single file (not a folder)."""
+        self.file_list = file_list
+        self.total_size = total_size
+        supported = sum(1 for f in file_list if f['supported'])
+        self.stats_lbl.config(text=f"1 {self.tr('files')} | {'1 ' + self.tr('supported') if supported else '0 supported'} | {human_readable_size(total_size)}")
+        self._update_tree()
+
+        if file_list and supported:
+            self.gen_btn.config(state='normal')
+            self.status_var.set(f"Single file: {self.target_file} ({'supported' if supported else 'unsupported'})")
+            self.dot.delete('all')
+            self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
+        else:
+            self.gen_btn.config(state='disabled')
+            self.status_var.set("File is not supported or unreadable")
+            self.dot.delete('all')
+            self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['warning'], outline='')
+
+        # Auto-name output from source file
+        base_name = os.path.splitext(self.target_file)[0]
+        ext = '.md' if self.output_format == 'md' else '.txt'
+        self.fname_var.set(f"{base_name}_export")
+
+        # Auto-name portal output directory from source file
+        if hasattr(self, '_pout_auto') and self._pout_auto:
+            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+            self._pout_updating = True
+            self.pout_var.set(os.path.join(desktop, f"{base_name}_portal"))
+            self._pout_updating = False
 
     def _on_scanned(self, file_list, total_size):
         self.file_list = file_list
@@ -960,12 +1064,30 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         if f:
             self.chunk_out_var.set(f)
 
+    def _on_format_change(self):
+        """Handle format toggle between TXT and MD."""
+        fmt = self.format_var.get()
+        self.output_format = fmt
+        ext = '.md' if fmt == 'md' else '.txt'
+        self.format_ext_lbl.config(text=ext)
+        
+        # Update output path extension
+        cur = self.out_var.get().strip()
+        if cur:
+            base, _ = os.path.splitext(cur)
+            self.out_var.set(base + ext)
+        
+        # Update fname with proper extension
+        name = self.fname_var.get().strip()
+        self.fname_var.set(name)  # Trigger trace
+
     def update_out_path(self):
         name = self.fname_var.get().strip()
         if name:
             cur = self.out_var.get()
             d = os.path.dirname(cur) if os.path.dirname(cur) else os.path.join(os.path.expanduser("~"), "Desktop")
-            self.out_var.set(os.path.join(d, f"{name}.txt"))
+            ext = '.md' if self.format_var.get() == 'md' else '.txt'
+            self.out_var.set(os.path.join(d, f"{name}{ext}"))
 
     def generate(self):
         if self.generating or not self.current_folder or not self.file_list:
@@ -1048,27 +1170,31 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self._sim_progress()
             return
 
-        # ---- Single TXT mode ----
+        # ---- Single TXT/MD mode ----
+        fmt = self.format_var.get() if hasattr(self, 'format_var') else 'txt'
         out = self.out_var.get().strip()
         if not out:
             messagebox.showerror("Error", "Set output path")
             return
-        # Ensure .txt extension
-        if not out.lower().endswith('.txt'):
-            out += '.txt'
+        # Ensure proper extension
+        expected_ext = '.md' if fmt == 'md' else '.txt'
+        if not out.lower().endswith(expected_ext):
+            out += expected_ext
             self.out_var.set(out)
-        # NOTE: max_chars truncation has been REMOVED.
-        # TXT mode always outputs complete file content.
-        # For size-controlled splitting, use the --split-chunks CLI option.
-        self._start_gen("Generating TXT..." if self._lang == 'en' else "正在生成 TXT...")
+        
+        mode_label = "MD" if fmt == 'md' else "TXT"
+        self._start_gen(f"Generating {mode_label}..." if self._lang == 'en' else f"正在生成 {mode_label}...")
 
         def task():
             try:
-                # Note: build_text_from_files no longer supports max_chars truncation.
-                # For size-controlled splitting, use --split-chunks CLI mode.
-                text, parsed, skipped, errors, chars = build_text_from_files(
-                    self.current_folder, self.file_list,
-                    include_skipped=skip)
+                if fmt == 'md':
+                    text, parsed, skipped, errors, chars = build_markdown_from_files(
+                        self.current_folder, self.file_list,
+                        include_skipped=skip, language=self._lang)
+                else:
+                    text, parsed, skipped, errors, chars = build_text_from_files(
+                        self.current_folder, self.file_list,
+                        include_skipped=skip)
                 with open(out, 'w', encoding='utf-8') as f:
                     f.write(text)
                 self.root.after(0, lambda: self.prog.config(value=100))

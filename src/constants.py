@@ -18,6 +18,10 @@ SUPPORTED_TEXT_EXTS = frozenset({
     '.sql', '.ddl', '.dml', '.pl', '.pm', '.tcl',
     '.markdown', '.rst', '.text', '.tsv',
     '.pdf', '.docx', '.pptx', '.xlsx',
+    # Legacy Office formats (handled via external conversion)
+    '.doc', '.ppt', '.xls',
+    # WPS Office formats
+    '.wps', '.et', '.dps',
     # Training / ML text config files
     '.prototxt', '.pbtxt', '.solver', '.trainval', '.test',
     '.cfg',
@@ -60,6 +64,8 @@ FILE_TYPE_MAP = {
     '.pptx': 'PowerPoint', '.ppt': 'PowerPoint',
     '.xlsx': 'Excel', '.xls': 'Excel',
     '.rtf': 'RTF',
+    # WPS Office formats
+    '.wps': 'WPS Writer', '.et': 'WPS Spreadsheet', '.dps': 'WPS Presentation',
     # Text / Markup
     '.txt': 'TXT', '.md': 'Markdown', '.rst': 'reStructuredText',
     '.html': 'HTML', '.htm': 'HTML', '.xhtml': 'XHTML',
@@ -145,7 +151,7 @@ FILE_TYPE_ICONS = {
     'SCSS': '🎨', 'Less': '🎨', 'Sass': '🎨',
     'JSON': '📋', 'XML': '📰', 'YAML': '⚙️',
     'CSV': '📊', 'TSV': '📊', 'Excel': '📊',
-    'PowerPoint': '📽️',
+    'PowerPoint': '📽️', 'WPS Writer': '📘', 'WPS Spreadsheet': '📊', 'WPS Presentation': '📽️',
     'Log': '📃', 'Config': '⚙️',
     'Shell Script': '💻', 'Bash': '💻', 'Zsh': '💻', 'Fish': '💻',
     'Batch': '💻', 'PowerShell': '💻', 'PowerShell Module': '💻',

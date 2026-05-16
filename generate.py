@@ -134,6 +134,14 @@ def main():
         default=None,
         help="将详细日志写入指定文件（默认仅输出到控制台）",
     )
+    # ── 输出格式 ──
+    parser.add_argument(
+        "--format", "--fmt",
+        type=str,
+        default="txt",
+        choices=["txt", "md", "markdown"],
+        help="Output format: txt (default) or md/markdown (default: txt)",
+    )
     # ── 分片模式（Chunked Output）──
     parser.add_argument(
         "--split-chunks",
@@ -188,6 +196,13 @@ def main():
     if not os.path.isdir(args.folder):
         print("错误：路径不是有效的文件夹：%s" % args.folder, file=sys.stderr)
         sys.exit(1)
+
+    # Determine output format
+    output_fmt = args.format
+    if output_fmt in ("md", "markdown"):
+        output_fmt = "md"
+    else:
+        output_fmt = "txt"
 
     if args.split_chunks:
         # ── 分片模式（Chunked Output）──
@@ -284,27 +299,39 @@ def main():
             print("警告：未生成任何文档（文件夹为空或所有文件都无法解析）", file=sys.stderr)
             sys.exit(1)
     else:
-        # -- 传统 TXT 模式（完整内容，无截断）--
+        # -- 传统 TXT/MD 模式（完整内容，无截断）--
         if args.max_chars is not None:
             print("⚠️  warning: --max-chars has no effect in single TXT mode (no truncation).\n"
                   "   Use --split-chunks to control output size by splitting into multiple files.\n")
-        text, parsed, skipped, errors, chars = build_text_content(args.folder)
-
-        # Ensure .txt extension
-        output_path = args.output
-        if not output_path.lower().endswith('.txt'):
-            output_path += '.txt'
+        
+        if output_fmt == 'md':
+            # Markdown mode
+            from src.gui_scanner import build_markdown_from_files
+            file_list, _ = collect_files_info(args.folder)
+            text, parsed, skipped, errors, chars = build_markdown_from_files(
+                args.folder, file_list,
+                include_skipped=True, language=args.lang)
+            output_path = args.output
+            if not output_path.lower().endswith('.md'):
+                output_path += '.md'
+        else:
+            text, parsed, skipped, errors, chars = build_text_content(args.folder)
+            output_path = args.output
+            if not output_path.lower().endswith('.txt'):
+                output_path += '.txt'
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(text)
+        
+        fmt_name = "Markdown" if output_fmt == 'md' else "TXT"
         print("OK - 已生成完整知识文件: %s" % output_path)
-        print("    共包含 %d 个文件内容, %d 总字符" % (parsed, chars))
+        print("    Format: %s | 共包含 %d 个文件内容, %d 总字符" % (fmt_name, parsed, chars))
         if skipped:
             print("    %d 个文件被跳过" % skipped)
         if errors:
             print("    %d 个文件解析出错" % errors)
         print()
-        print("提示：为避免单个 TXT 文件过大溢出 LLM 上下文，建议使用：")
+        print("提示：为避免单个文件过大溢出 LLM 上下文，建议使用：")
         print("  --split-chunks : 按固定大小将内容自动拆分到多个文件")
         print("  --portal       : 生成可搜索的知识门户（推荐）")
 

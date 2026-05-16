@@ -400,9 +400,13 @@ def build_file_tree_split_html(folder_path: str, parsed_docs: list) -> str:
 
 
 def build_search_index_json(docs_texts: list) -> str:
-    """Build a JSON array for search indexing on the main page.
+    """Build a lightweight JSON array for client-side search indexing.
     
-    Each entry contains: path, name, tags, preview (first 200 chars).
+    Each entry contains: path, name, tags, preview (first 300 chars).
+    The 'text' field is intentionally omitted — the index is embedded in the
+    HTML page and would bloat memory with full file contents. For large
+    document sets, consider loading the index dynamically from an external
+    JSON file instead.
     
     Args:
         docs_texts: List of doc dicts with keys: title, text, tags
@@ -421,14 +425,17 @@ def build_search_index_json(docs_texts: list) -> str:
         # Get just the filename from the path
         name = os.path.basename(title.replace('\\', '/'))
         
-        # Preview: first 200 chars
-        preview = text[:200].replace('\n', ' ').strip()
+        # Preview: first 300 chars for search context
+        preview = text[:300].replace('\n', ' ').strip()
         
         index_data.append({
             "path": title,
             "name": name,
             "tags": tags[:8],
             "preview": preview,
+            # Note: 'text' field omitted to keep index lightweight.
+            # The client-side tree-item search matches on 'name', 'tags',
+            # and 'preview' fields, which provides sufficient accuracy.
         })
     
     return json.dumps(index_data, ensure_ascii=False)
