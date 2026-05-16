@@ -16,10 +16,10 @@
 
 # FolderKnowledgeSiteGeneratorForAI 📁 → 🌐
 
-[![PyPI Version](https://img.shields.io/badge/pypi-v2.1.0-blue)](https://pypi.org/project/FolderKnowledgeSiteGeneratorForAI/)
+[![PyPI Version](https://img.shields.io/badge/pypi-v2.2.0-blue)](https://pypi.org/project/FolderKnowledgeSiteGeneratorForAI/)
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-129%20passed-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-134%20passed-brightgreen)](tests/)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-7B3F00)](pyproject.toml)
 
 > **将任意文件夹一键变为 AI 可读的知识门户、分片文本或多页索引，无需服务器与 API。**
@@ -220,7 +220,7 @@ output_dir/
 
 ---
 
-## ✨ 高级特性与最新改进 (v2.1.x) / Advanced Features & Latest Improvements
+## ✨ 高级特性与最新改进 (v2.2.x) / Advanced Features & Latest Improvements
 
 | 改进 | 说明 |
 |------|------|
@@ -234,6 +234,13 @@ output_dir/
 | 🧰 **`src/utils.py` 抽取** | `human_readable_size` 等工具函数集中管理 |
 | 📝 **模板变量化** | `index_page.html` 使用 `$placeholder` 标准占位符 |
 | 🚫 **LICENSE / .log / .lock 已移除** | 避免 TXT 中出现日志和配置文件 |
+| 🧹 **消除重复代码** | 删除 `portal.py` 中与 `templates.py` 重复的 `_path_to_subpage_filename` 函数，改为统一导入 |
+| 📐 **智能换行截断** | 分片模式的 `--max-chars` 截断自动在最近的换行符边界进行，避免破坏 Markdown/代码结构 |
+| 🎯 **统一公共 API** | `src/__init__.py` 与 `src/generator/__init__.py` 显式导出 `generate_portal`、`collect_files_info` 等核心接口 |
+| 🔇 **GUI 静默模式** | `build_markdown_from_files` 和 `build_text_from_files` 新增 `verbose` 参数，GUI 调用时静默运行 |
+| 🚀 **Web 开发优化** | 新增 HTTP 服务器功能（门户/分片生成后一键启动本地服务器），便于 AI 直接读取 |
+| 📚 **Magic 回退测试** | 新增 `test_magic_fallback` 测试，覆盖 `python-magic` 加载失败时的扩展名回退路径 |
+| 🏗️ **分片模块简化** | `src/chunker/` 包内代码全部集中在 `__init__.py` 中，减少不必要的嵌套目录 |
 
 ---
 
