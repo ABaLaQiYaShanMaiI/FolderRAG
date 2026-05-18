@@ -16,6 +16,7 @@ Design decisions:
 
 import os
 import re
+import sys
 import base64
 import logging
 from datetime import datetime
@@ -44,9 +45,15 @@ _DEFAULT_MAX_CHARS_PER_FILE = 50_000
 # ============================================================
 
 def extract_keywords(text: str, max_words: int = 8) -> list:
-    """Extract keywords from text using frequency + stop word filtering."""
-    chinese_chars = re.findall(r'[\u4e00-\u9fff]{2,6}', text)
-    english_words = re.findall(r'\b[a-zA-Z]{3,15}\b', text.lower())
+    """Extract keywords from text using frequency + stop word filtering.
+
+    Supports Chinese word extraction (2-8 characters) and English words (3-20 chars).
+    Filters common stop words in both languages.
+    """
+    # Chinese: extract 2-8 character sequences to capture multi-character terms
+    # like "人工智能" (AI), "机器学习" (machine learning) etc.
+    chinese_chars = re.findall(r'[\u4e00-\u9fff]{2,8}', text)
+    english_words = re.findall(r'\b[a-zA-Z]{3,20}\b', text.lower())
 
     stop_words = {
         'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'are', 'was', 'were',
@@ -273,6 +280,14 @@ def generate_portal(
     skip_by_reason: dict[str, int] = {}
 
     if show_progress:
+        if sys.platform == 'win32':
+            # Windows CMD with CP936 may garble \r carriage return with non-ASCII chars;
+            # use sys.stdout.reconfigure to ensure proper print behavior
+            if hasattr(sys.stdout, 'reconfigure'):
+                try:
+                    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+                except Exception:
+                    pass
         print("  [Scan] Found %d files, parsing..." % total_files)
 
     for file_idx, (full_path, rel_path) in enumerate(all_files):
@@ -284,8 +299,9 @@ def generate_portal(
             bar_len = 30
             filled = int(bar_len * (file_idx + 1) / total_files)
             bar = '#' * filled + '.' * (bar_len - filled)
-            print("\r  [%s] %d/%d (%.0f%%) - %s" % (
-                bar, file_idx + 1, total_files, pct, rel_path[:60]),
+            # Avoid problematic characters in progress bar; use ASCII-only progress line
+            print("\r  [%s] %d/%d (%.0f%%)" % (
+                bar, file_idx + 1, total_files, pct),
                 end='', flush=True)
 
         try:

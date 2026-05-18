@@ -12,14 +12,8 @@ import shutil
 
 logger = logging.getLogger(__name__)
 
-LIBREOFFICE_PATH = None
-WPS_PATH = None
-
-
 def _find_libreoffice():
     """Try to locate LibreOffice executable on the system."""
-    if LIBREOFFICE_PATH and os.path.isfile(LIBREOFFICE_PATH):
-        return LIBREOFFICE_PATH
     candidates = []
     if sys.platform == 'win32':
         candidates = [
@@ -44,8 +38,6 @@ def _find_libreoffice():
 
 def _find_wps():
     """Try to locate WPS Office executable on the system."""
-    if WPS_PATH and os.path.isfile(WPS_PATH):
-        return WPS_PATH
     if sys.platform == 'win32':
         for ver in ['12', '11', '10', '9', '8', '7']:
             p = r"C:\Program Files (x86)\WPS Office\{}\wps.exe".format(ver)
@@ -72,8 +64,6 @@ def _convert_via_libreoffice(src_path, target_ext):
         base = os.path.splitext(os.path.basename(src_path))[0]
         converted = os.path.join(tmp_dir, base + target_ext)
         if os.path.isfile(converted):
-            # Check if the converted file is empty (0 bytes)  conversion may have
-            # produced an empty stub with no actual content
             if os.path.getsize(converted) == 0:
                 logger.warning("LibreOffice produced empty file for %s (0 bytes)", src_path)
                 return None
@@ -87,6 +77,13 @@ def _convert_via_libreoffice(src_path, target_ext):
     except Exception as e:
         logger.exception("LibreOffice conversion error for %s: %s", src_path, e)
         return None
+    finally:
+        # Clean up temp directory regardless of outcome
+        if os.path.isdir(tmp_dir):
+            try:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception as e:
+                logger.warning("Failed to clean up LibreOffice temp dir %s: %s", tmp_dir, e)
 
 
 def _convert_via_wps(src_path, target_ext):
@@ -211,9 +208,9 @@ def _get_style_label(paragraph):
         style = paragraph.style
         if style and style.name:
             name = style.name
-            if name.startswith('Heading') or name.startswith('heading'):
-                return "[{}]".format(name)
-            if hasattr(style, 'builtin') and style.builtin and 'heading' in name.lower():
+            # Both checks merged: 'Heading' prefix OR built-in heading style
+            if name.startswith('Heading') or name.startswith('heading') or \
+               (hasattr(style, 'builtin') and style.builtin and 'heading' in name.lower()):
                 return "[{}]".format(name)
     except Exception:
         pass
@@ -248,8 +245,18 @@ def _parse_docx(filepath, include_tables=False, include_headers_footers=False,
         for ti, table in enumerate(doc.tables, 1):
             rows = []
             for row in table.rows:
-                cells = [cell.text.strip() for cell in row.cells]
-                rt = " | ".join(cells)
+                # Deduplicate merged cells: python-docx returns duplicate cell objects for merged cells
+                seen_texts = set()
+                filtered_cells = []
+                for cell in row.cells:
+                    cell_text = cell.text.strip()
+                    if cell_text and cell_text not in seen_texts:
+                        seen_texts.add(cell_text)
+                        filtered_cells.append(cell_text)
+                    elif not cell_text:
+                        filtered_cells.append("")
+                # If no unique non-empty cells remain, keep at least the first cell
+                rt = " | ".join(filtered_cells)
                 if rt.strip():
                     rows.append(rt)
             if rows:
@@ -346,7 +353,7 @@ def _parse_pptx(filepath, extract_notes=False):
 
 
 def _parse_xlsx(filepath, max_rows=10000):
-    """Parse a .xlsx file with row limit."""
+    """Parse a .xlsx file with row limit per worksheet."""
     import openpyxl
     wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
     text_parts = []
@@ -356,12 +363,12 @@ def _parse_xlsx(filepath, max_rows=10000):
         text_parts.append("=" * 60)
         text_parts.append("Sheet: {}".format(sheet_name))
         text_parts.append("=" * 60)
-        rc = 0
+        rc = 0  # Reset per-worksheet counter
         for row in ws.iter_rows(values_only=True):
             rc += 1
             if rc > max_rows:
                 text_parts.append("")
-                text_parts.append("... [Max %d rows reached; truncating] ..." % max_rows)
+                text_parts.append("... [Max %d rows reached; truncating sheet] ..." % max_rows)
                 break
             rt = " | ".join(str(c) if c is not None else "" for c in row)
             if rt.strip():

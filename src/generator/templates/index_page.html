@@ -241,6 +241,8 @@
     .match-count-badge { background: #64b5f6 !important; color: #16213e !important; }
   }
 
+  .copy-file-btn.copied { background: #34a853; }
+
   @media print {
     body { background: white; color: black; padding: 0.2in; }
     .portal-header { background: #1a73e8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -333,6 +335,16 @@
   </div>
 </div>
 
+</div>
+
+<!-- ── File content blocks (single-page mode: always-expanded file contents) ── -->
+<div id="fileContentsSection" class="file-blocks-section" style="margin-top:16px;">
+  <div class="file-blocks-header">
+    <span class="file-blocks-title">📄 <span data-i18n="file_contents">File Contents</span></span>
+  </div>
+  <div id="fileContentsContainer">
+    $file_contents_html
+  </div>
 </div>
 
 <div class="footer">
@@ -708,6 +720,48 @@ function setSearchMode(mode) {
     }
   });
 })();
+
+// ── Copy file content function (consistent with subpage.html's copyCode) ──
+function copyCode(btn) {
+  // Find the doc-content within the same doc-block as the clicked button
+  const docBlock = btn.closest('.doc-block');
+  if (!docBlock) return;
+  const codeEl = docBlock.querySelector('.doc-content code');
+  if (!codeEl) return;
+  const text = codeEl.textContent || codeEl.innerText;
+  
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showCopied(btn);
+    }).catch(() => {
+      fallbackCopy(btn, text);
+    });
+  } else {
+    fallbackCopy(btn, text);
+  }
+}
+
+function fallbackCopy(btn, text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showCopied(btn); } catch(e) {}
+  document.body.removeChild(ta);
+}
+
+function showCopied(btn) {
+  const originalText = btn.textContent;
+  const lang = document.documentElement.getAttribute('data-lang') || 'en';
+  btn.textContent = lang === 'zh' ? '✅ 已复制！' : '✅ Copied!';
+  btn.classList.add('copied');
+  setTimeout(() => {
+    btn.textContent = originalText;
+    btn.classList.remove('copied');
+  }, 2000);
+}
 </script>
 
 </body>

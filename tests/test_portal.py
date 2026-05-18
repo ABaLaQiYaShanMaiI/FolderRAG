@@ -8,8 +8,8 @@ from src.generator.portal import (
     generate_portal,
     generate_portal_split,
     extract_keywords,
-    human_readable_size,
 )
+from src.utils import human_readable_size
 
 
 def test_human_readable_size():

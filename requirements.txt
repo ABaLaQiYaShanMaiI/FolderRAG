@@ -1,25 +1,14 @@
-# ============================================================
-# FolderKnowledgeSiteGeneratorForAI — Dependencies
-# ============================================================
-# Document parsers
+# Runtime dependencies (synced with pyproject.toml)
+# For `pip install -r requirements.txt`
+python-magic>=0.4.27
 pdfminer.six>=20221105
 python-docx>=0.8.11
-python-pptx>=0.6.21
-openpyxl>=3.1.2
-
-# Character encoding detection
+python-pptx>=1.0.2
+openpyxl>=3.1.5
 chardet>=5.0
 
-# MIME type detection for all platforms
-python-magic>=0.4.27
-python-magic-bin>=0.4.14; platform_system == "Windows"
+# Optional GUI dependency (install separately if using GUI)
+# tkinterdnd2>=0.3.0
 
-# GUI dependencies
-tkinterdnd2>=0.3.0
-
-# Development
-pytest>=7.0
-ruff>=0.1.0
-
-# Test dependencies
-pytest-cov>=4.0
+# Dev dependencies
+# pytest>=7.0.0

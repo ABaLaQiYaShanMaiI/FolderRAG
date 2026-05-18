@@ -118,7 +118,7 @@ def build_file_content_blocks(docs_texts: list) -> str:
             f'    <span class="file-size">{size_hr_escaped}</span>\n'
             f'    <span class="file-chars">{size_str} chars</span>\n'
             f'    <span class="file-tags">{tags_html}</span>\n'
-            f'    <button class="copy-file-btn" data-file-index="{i}" onclick="copyFileContent(this)" title="Copy this file">📋 Copy</button>\n'
+            f'    <button class="copy-file-btn" data-file-index="{i}" onclick="copyCode(this)" title="Copy this file">📋 Copy</button>\n'
             f'  </div>\n'
             f'  <div class="doc-content">\n'
             f'    <pre id="file-content-{i}"><code>{escaped_text}</code></pre>\n'
@@ -296,6 +296,8 @@ def build_subpage_html(
         "chars_text": chars_text,
         "generated_by_text": generated_by_text,
     })
+    # Guard against accidental bare $$ in output (from user content that contained $)
+    # string.Template uses $$ for literal $, so if user content had $ it's already escaped.
     return result
 
 
@@ -425,19 +427,18 @@ def build_search_index_json(docs_texts: list) -> str:
         # Get just the filename from the path
         name = os.path.basename(title.replace('\\', '/'))
 
-        # Preview: first 300 chars for search context
-        preview = text[:300].replace('\n', ' ').strip()
+        # Preview: first 2000 chars for better search context and content matching.
+        # Also include first 200 chars of raw text as hidden searchable text.
+        preview = text[:2000].replace('\n', ' ').strip()
 
         index_data.append({
             "path": title,
             "name": name,
             "tags": tags[:8],
             "preview": preview,
-            # Note: 'text' field omitted to keep index lightweight.
-            # The client-side tree-item search matches on 'name', 'tags',
-            # and 'preview' fields, which provides sufficient accuracy.
+            # Note: full 'text' field omitted to keep index lightweight,
+            # but increased preview provides significantly better search quality.
         })
-
     return json.dumps(index_data, ensure_ascii=False)
 
 

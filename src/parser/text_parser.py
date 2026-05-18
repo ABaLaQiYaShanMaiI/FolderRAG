@@ -54,7 +54,9 @@ def _try_encodings(filepath: str, encodings: list) -> str:
         except Exception as e:
             last_error = e
             continue
-    raise last_error or UnicodeDecodeError("All encodings failed")
+    if last_error is None:
+        raise UnicodeDecodeError("utf-8", b"", 0, 0, "All encodings failed")
+    raise last_error
 
 
 def parse_text(filepath, mime=None):
