@@ -151,17 +151,17 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.generating = False
         self.input_is_file = False
         self.target_file = None
-        self.output_format = 'txt'  # 'txt' or 'md'
+        self.output_format = 'txt'
         self.output_path = os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_export.txt")
-        # NOTE: max_chars per-file truncation has been REMOVED.
-        # TXT mode always outputs complete content.
-        # For size-controlled splitting, use --split-chunks CLI mode.
 
         # --- HTTP server state ---
         self._server_thread = None
         self._httpd = None
         self._server_port = 8080
         self._server_root = None
+
+        # --- Content search index (instance-level, reset on folder change) ---
+        self._content_search_index = {}  # Instance variable, NOT class variable
 
         self._load_settings()
         self.root.title("FolderKnowledgeSiteGeneratorForAI")
@@ -336,13 +336,11 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.main = ttk.Frame(self.root, padding="10")
         self.main.pack(fill=tk.BOTH, expand=True)
 
-        # ── Header bar ──
         hdr = tk.Frame(self.main, bg=self.COLORS['bg'])
         hdr.pack(fill=tk.X, pady=(0, 6))
         ttk.Label(hdr, text=self.tr('title'), style='Title.TLabel').pack(side=tk.LEFT)
         ttk.Label(hdr, text=self.tr('subtitle'), style='Subtitle.TLabel').pack(side=tk.LEFT, padx=(8, 0))
 
-        # Language toggle
         lang_f = tk.Frame(hdr, bg=self.COLORS['bg'])
         lang_f.pack(side=tk.RIGHT)
         for lcode, ltxt in [('en', 'EN'), ('zh', '中文')]:
@@ -353,19 +351,10 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                             cursor='hand2', command=lambda c=lcode: self.set_lang(c))
             btn.pack(side=tk.LEFT, padx=1)
 
-        # ── Folder row: entry + browse + paste ──
         self.build_folder_row()
-
-        # ── File list ──
         self.build_file_list()
-
-        # ── Settings panel ──
         self.build_settings()
-
-        # ── Server control bar ──
         self.build_server_controls()
-
-        # ── Generate button + status ──
         self.build_gen_section()
 
     def build_folder_row(self):
@@ -416,23 +405,13 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         make_btn('Clear', self.clear_folder, self.COLORS['error'])
 
     def _on_drop(self, event):
-        """Handle file/folder drag-and-drop.
-        
-        In Windows, event.data may contain multiple paths wrapped in { } { }.
-        Extracts the first valid path and loads it.
-        Supports both files and folders: if a single file is dropped,
-        only that file will be processed (not the entire parent folder).
-        """
         raw = event.data or ""
         if not raw:
             return
-        
-        # Split multiple paths (Windows format: "{path1}" "{path2}")
-        # Handle both with and without curly brace wrapping
         import re as _re
         candidates = _re.findall(r'\{([^}]+)\}|"([^"]+)"|(\S+)', raw)
         paths = [p for group in candidates for p in group if p]
-        
+
         for candidate in paths:
             path = candidate.strip().strip('"').strip("'")
             if os.path.isfile(path):
@@ -448,8 +427,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                 self.path_var.set(folder)
                 self.load_folder(folder)
                 return
-        
-        # Fallback: treat entire data as a single path
+
         path = raw.strip('{}').strip('"')
         if os.path.isfile(path):
             self.path_var.set(path)
@@ -464,7 +442,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                 self.load_folder(folder)
 
     def build_file_list(self):
-        # Card-style frame with background color and border for the file tree
         flist_card = tk.Frame(self.main, bg=self.COLORS['card'],
                               highlightbackground=self.COLORS['border'],
                               highlightthickness=1, padx=10, pady=8)
@@ -479,7 +456,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                                   bg=self.COLORS['card'], fg=self.COLORS['text_secondary'])
         self.stats_lbl.pack(side=tk.RIGHT)
 
-        # ── Search bar for code content search ──
         search_row = tk.Frame(flist_card, bg=self.COLORS['card'])
         search_row.pack(fill=tk.X, pady=(0, 3))
 
@@ -498,7 +474,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         search_clear_btn.bind('<Enter>', lambda e: search_clear_btn.configure(bg='#999'))
         search_clear_btn.bind('<Leave>', lambda e: search_clear_btn.configure(bg=self.COLORS['text_secondary']))
 
-        # Search mode toggle: file name only / full code content
         self.search_mode_var = tk.StringVar(value='name')
         name_rb = tk.Radiobutton(search_row, text='Name', variable=self.search_mode_var,
                                  value='name', font=('Segoe UI', 8),
@@ -511,16 +486,13 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                                  command=self._filter_file_tree)
         code_rb.pack(side=tk.LEFT, padx=(0, 2))
 
-        # ── Spacer pushes hints to the right ──
         spacer = tk.Frame(search_row, bg=self.COLORS['card'])
         spacer.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # Search mode hint on the right side (文件结构右边)
         self.search_hint_lbl = tk.Label(search_row, text='', font=('Segoe UI', 7),
                                         bg=self.COLORS['card'], fg=self.COLORS['text_secondary'])
         self.search_hint_lbl.pack(side=tk.RIGHT, padx=(0, 6))
 
-        # Keyboard shortcut hint (最右边)
         if self._lang == 'zh':
             shortcut_text = '双击打开  |  Esc退出'
         else:
@@ -557,13 +529,10 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.tree.tag_configure('skip', foreground=self.COLORS['text_secondary'])
         self.tree.tag_configure('even', background='#fafafa')
         self.tree.tag_configure('odd', background='#ffffff')
-        self.tree.tag_configure('matched', background='#fff3cd')  # highlight matches in yellow
+        self.tree.tag_configure('matched', background='#fff3cd')
 
-        # Double-click to open file in system editor
         self.tree.bind('<Double-1>', self._on_tree_double_click)
-        # Also bind Enter key on selection
         self.tree.bind('<Return>', self._on_tree_double_click)
-        # Update hint when mode changes
         self._update_search_hint()
 
     def build_settings(self):
@@ -572,7 +541,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                               highlightthickness=1, padx=10, pady=8)
         self.set_f.pack(fill=tk.X, pady=(0, 6))
 
-        # Mode row
         mode_f = tk.Frame(self.set_f, bg=self.COLORS['card'])
         mode_f.pack(fill=tk.X, pady=(0, 4))
         tk.Label(mode_f, text=self.tr('mode_label'), font=('Segoe UI', 10),
@@ -594,7 +562,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         sep = tk.Frame(self.set_f, bg=self.COLORS['border'], height=1)
         sep.pack(fill=tk.X, pady=(4, 6))
 
-        # Single-mode settings
         self.single_f = tk.Frame(self.set_f, bg=self.COLORS['card'])
         self.single_f.pack(fill=tk.X)
 
@@ -620,7 +587,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         ttk.Entry(r2, textvariable=self.fname_var, width=16).pack(side=tk.LEFT, padx=(4, 2))
         self.fname_var.trace_add('write', lambda *a: self.update_out_path())
 
-        # Format toggle: TXT / MD
         tk.Label(r2, text='Format:', font=('Segoe UI', 10),
                  bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT, padx=(12, 2))
         self.format_var = tk.StringVar(value='txt')
@@ -633,15 +599,11 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                                        bg=self.COLORS['card'], fg=self.COLORS['primary'])
         self.format_ext_lbl.pack(side=tk.LEFT, padx=(4, 0))
 
-        # Note: max_chars per-file truncation has been REMOVED in traditional TXT mode.
-        # For size-controlled splitting, use the --split-chunks CLI mode.
-
         self.skip_var = tk.BooleanVar(value=True)
         tk.Checkbutton(self.single_f, text=self.tr('show_skip'),
                        variable=self.skip_var, font=('Segoe UI', 10),
                        bg=self.COLORS['card'], selectcolor=self.COLORS['card']).pack(anchor=tk.W, pady=(2, 0))
 
-        # Chunked mode settings (hidden by default)
         self.chunked_f = tk.Frame(self.set_f, bg=self.COLORS['card'])
         cr1 = tk.Frame(self.chunked_f, bg=self.COLORS['card'])
         cr1.pack(fill=tk.X, pady=1)
@@ -670,17 +632,14 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                        variable=self.force_split_var, font=('Segoe UI', 10),
                        bg=self.COLORS['card'], selectcolor=self.COLORS['card']).pack(anchor=tk.W, pady=(2, 0))
 
-        # Portal settings (hidden by default)
-        # Only output dir + port — no pagination settings
         self.portal_f = tk.Frame(self.set_f, bg=self.COLORS['card'])
         pr1 = tk.Frame(self.portal_f, bg=self.COLORS['card'])
         pr1.pack(fill=tk.X, pady=1)
         tk.Label(pr1, text=self.tr('out_dir'), font=('Segoe UI', 10),
                  bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
         self.pout_var = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Desktop", "knowledge_portal"))
-        self._pout_auto = True  # Auto-name from source folder
-        self._pout_updating = False  # Guard to prevent re-entrant auto-update
-        # Detect manual edits to portal output path
+        self._pout_auto = True
+        self._pout_updating = False
         def _trace_pout(*a):
             if not self._pout_updating:
                 self._pout_auto = False
@@ -696,7 +655,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         pr2 = tk.Frame(self.portal_f, bg=self.COLORS['card'])
         pr2.pack(fill=tk.X, pady=1)
 
-        # Port input only
         tk.Label(pr2, text=self.tr('port_label'), font=('Segoe UI', 10),
                  bg=self.COLORS['card'], fg=self.COLORS['text']).pack(side=tk.LEFT)
         self.port_var = tk.StringVar(value=str(self._server_port))
@@ -731,69 +689,42 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self.fname_var.set(os.path.splitext(os.path.basename(fp))[0])
 
     def _save_port(self):
-        """Save port from entry widget."""
         try:
             self._server_port = int(self.port_var.get().strip())
         except (ValueError, AttributeError):
             pass
 
     def build_server_controls(self):
-        """Build HTTP server control bar (hidden until portal generated)."""
         self.server_f = tk.Frame(self.main, bg=self.COLORS['card'],
                                  highlightbackground=self.COLORS['border'],
                                  highlightthickness=1, padx=10, pady=6)
         self.server_f.pack(fill=tk.X, pady=(0, 6))
 
         self.server_status_lbl = tk.Label(
-            self.server_f,
-            text=self.tr('status_ready'),
-            font=('Segoe UI', 10),
-            bg=self.COLORS['card'],
-            fg=self.COLORS['text_secondary']
-        )
+            self.server_f, text=self.tr('status_ready'), font=('Segoe UI', 10),
+            bg=self.COLORS['card'], fg=self.COLORS['text_secondary'])
         self.server_status_lbl.pack(side=tk.LEFT, padx=(0, 8))
 
         self.server_start_btn = tk.Button(
-            self.server_f,
-            text=f"▶ {self.tr('server_start')}",
-            font=('Segoe UI', 9),
-            bg=self.COLORS['primary'],
-            fg='white',
-            relief='flat',
-            cursor='hand2',
-            command=self._on_server_start,
-            padx=10, pady=2
-        )
+            self.server_f, text=f"▶ {self.tr('server_start')}", font=('Segoe UI', 9),
+            bg=self.COLORS['primary'], fg='white', relief='flat', cursor='hand2',
+            command=self._on_server_start, padx=10, pady=2)
         self.server_start_btn.pack(side=tk.LEFT, padx=2)
         self.server_start_btn.bind('<Enter>', lambda e: self.server_start_btn.configure(bg=self.COLORS['primary_hover']))
         self.server_start_btn.bind('<Leave>', lambda e: self.server_start_btn.configure(bg=self.COLORS['primary']))
 
         self.server_stop_btn = tk.Button(
-            self.server_f,
-            text=f"⏹ {self.tr('server_stop')}",
-            font=('Segoe UI', 9),
-            bg=self.COLORS['error'],
-            fg='white',
-            relief='flat',
-            cursor='hand2',
-            command=self._stop_server,
-            padx=10, pady=2
-        )
+            self.server_f, text=f"⏹ {self.tr('server_stop')}", font=('Segoe UI', 9),
+            bg=self.COLORS['error'], fg='white', relief='flat', cursor='hand2',
+            command=self._stop_server, padx=10, pady=2)
         self.server_stop_btn.pack_forget()
         self.server_stop_btn.bind('<Enter>', lambda e: self.server_stop_btn.configure(bg='#d32f2f'))
         self.server_stop_btn.bind('<Leave>', lambda e: self.server_stop_btn.configure(bg=self.COLORS['error']))
 
         self.server_copy_btn = tk.Button(
-            self.server_f,
-            text=f"📋 {self.tr('copy_url')}",
-            font=('Segoe UI', 9),
-            bg=self.COLORS['primary'],
-            fg='white',
-            relief='flat',
-            cursor='hand2',
-            command=self._copy_server_url,
-            padx=10, pady=2
-        )
+            self.server_f, text=f"📋 {self.tr('copy_url')}", font=('Segoe UI', 9),
+            bg=self.COLORS['primary'], fg='white', relief='flat', cursor='hand2',
+            command=self._copy_server_url, padx=10, pady=2)
         self.server_copy_btn.pack_forget()
         self.server_copy_btn.bind('<Enter>', lambda e: self.server_copy_btn.configure(bg=self.COLORS['primary_hover']))
         self.server_copy_btn.bind('<Leave>', lambda e: self.server_copy_btn.configure(bg=self.COLORS['primary']))
@@ -801,7 +732,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self._update_server_ui()
 
     def _on_server_start(self):
-        """Handle start server button click."""
         if not self._server_root or not os.path.isdir(self._server_root):
             self.status_var.set("No portal output directory to serve. Generate a portal first.")
             return
@@ -827,7 +757,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.prog = ttk.Progressbar(gen_f, mode='determinate', length=400)
         self.prog.pack_forget()
 
-        # Status bar
         st_f = tk.Frame(self.main, bg=self.COLORS['bg'], height=24)
         st_f.pack(fill=tk.X)
         st_f.pack_propagate(False)
@@ -862,8 +791,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         self.root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
-    # ── Folder operations ──
-
     def load_from_path(self):
         path = self.path_var.get().strip().strip('"')
         if os.path.isfile(path):
@@ -874,48 +801,34 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self.status_var.set(f"Invalid path: {path}")
 
     def load_path(self, path):
-        """Load a single file (not folder) - only this file will be processed."""
         if self.generating:
             return
         self.input_is_file = True
         self.target_file = os.path.basename(path)
         self.current_folder = os.path.dirname(path)
-        
-        # Create a single-file file_list
         file_size = os.path.getsize(path)
         ext = os.path.splitext(path)[1].lower()
         from src.gui_scanner import is_file_supported
         supported = is_file_supported(path, ext)
-        
         self.file_list = [{
-            'path': path,
-            'rel_path': self.target_file,
-            'size': file_size,
-            'size_hr': human_readable_size(file_size),
-            'ext': ext,
-            'supported': supported,
+            'path': path, 'rel_path': self.target_file, 'size': file_size,
+            'size_hr': human_readable_size(file_size), 'ext': ext, 'supported': supported,
         }]
         self.total_size = file_size
-        
-        # Update UI
         self.root.after(0, lambda: self._on_scanned_single(self.file_list, self.total_size))
 
     def browse_folder(self):
-        # Allow selecting both files and folders
         from tkinter import filedialog
         folder = filedialog.askdirectory(title="Select a folder or file (cancel to pick a file)")
         if folder:
             self.path_var.set(folder)
             self.load_folder(folder)
         else:
-            # User cancelled folder dialog - offer file selection instead
             file_path = filedialog.askopenfilename(
                 title="Select a file",
                 filetypes=[
                     ("All supported files", "*.pdf *.docx *.doc *.txt *.md *.html *.py *.js *.ts *.json *.xml *.csv *.yaml *.yml"),
-                    ("All files", "*.*")
-                ]
-            )
+                    ("All files", "*.*")])
             if file_path:
                 self.path_var.set(file_path)
                 self.load_path(file_path)
@@ -927,6 +840,8 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.input_is_file = False
         self.target_file = None
         self.path_var.set('')
+        # Reset content search index on folder clear
+        self._content_search_index = {}
         for item in self.tree.get_children():
             self.tree.delete(item)
         self.gen_btn.config(state='disabled')
@@ -952,6 +867,8 @@ class FolderKnowledgeSiteGeneratorForAIUI:
     def load_folder(self, folder_path):
         if self.generating:
             return
+        # Reset content search index on new folder load
+        self._content_search_index = {}
         self.current_folder = folder_path
         self.status_var.set(f"{self.tr('scanning')} {folder_path}")
         self.root.update_idletasks()
@@ -962,7 +879,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         threading.Thread(target=scan, daemon=True).start()
 
     def _on_scanned_single(self, file_list, total_size):
-        """Handle scan result for a single file (not a folder)."""
         self.file_list = file_list
         self.total_size = total_size
         supported = sum(1 for f in file_list if f['supported'])
@@ -980,12 +896,10 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self.dot.delete('all')
             self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['warning'], outline='')
 
-        # Auto-name output from source file
         base_name = os.path.splitext(self.target_file)[0]
         ext = '.md' if self.output_format == 'md' else '.txt'
         self.fname_var.set(f"{base_name}_export")
 
-        # Auto-name portal output directory from source file
         if hasattr(self, '_pout_auto') and self._pout_auto:
             desktop = os.path.join(os.path.expanduser("~"), "Desktop")
             self._pout_updating = True
@@ -1010,14 +924,12 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self.dot.delete('all')
             self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['warning'], outline='')
 
-        # Auto-name TXT output from source folder
         folder_basename = os.path.basename(os.path.normpath(self.current_folder))
         self.fname_var.set(f"{folder_basename}_export")
 
-        # Auto-name portal output directory from source folder (only if user hasn't manually changed it)
         if hasattr(self, '_pout_auto') and self._pout_auto:
             desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-            self._pout_updating = True  # Prevent trace from disabling auto-mode
+            self._pout_updating = True
             self.pout_var.set(os.path.join(desktop, f"{folder_basename}_portal"))
             self._pout_updating = False
 
@@ -1063,21 +975,16 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self.chunk_out_var.set(f)
 
     def _on_format_change(self):
-        """Handle format toggle between TXT and MD."""
         fmt = self.format_var.get()
         self.output_format = fmt
         ext = '.md' if fmt == 'md' else '.txt'
         self.format_ext_lbl.config(text=ext)
-        
-        # Update output path extension
         cur = self.out_var.get().strip()
         if cur:
             base, _ = os.path.splitext(cur)
             self.out_var.set(base + ext)
-        
-        # Update fname with proper extension
         name = self.fname_var.get().strip()
-        self.fname_var.set(name)  # Trigger trace
+        self.fname_var.set(name)
 
     def update_out_path(self):
         name = self.fname_var.get().strip()
@@ -1091,7 +998,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         if self.generating or not self.current_folder or not self.file_list:
             return
 
-        # Save port before generation starts
         self._save_port()
 
         mode = self.mode_var.get()
@@ -1100,7 +1006,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         skip = self.skip_var.get()
 
         if is_chunked:
-            # ---- Chunked/Split TXT mode ----
             try:
                 from src.chunker import write_chunks, DEFAULT_CHUNK_SIZE
             except ImportError:
@@ -1122,17 +1027,13 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                 return
 
             force_split = self.force_split_var.get()
-
             self._start_gen("Generating split TXT files..." if self._lang == 'en' else "正在生成分片 TXT...")
 
             def task():
                 try:
                     result = write_chunks(
-                        folder_path=self.current_folder,
-                        output_dir=out_dir,
-                        chunk_size=chunk_size,
-                        force_split=force_split,
-                    )
+                        folder_path=self.current_folder, output_dir=out_dir,
+                        chunk_size=chunk_size, force_split=force_split)
                     self.root.after(0, lambda: self._chunked_done(result))
                 except Exception as e:
                     self.root.after(0, lambda e=e: self._gen_err(str(e)))
@@ -1154,11 +1055,8 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             def task():
                 try:
                     r = generate_portal_split(
-                        folder_path=self.current_folder,
-                        output_dir=out_dir,
-                        include_skipped=skip,
-                        language=self._lang,
-                    )
+                        folder_path=self.current_folder, output_dir=out_dir,
+                        include_skipped=skip, language=self._lang)
                     self._server_root = r.get("output_dir", out_dir)
                     self.root.after(0, lambda: self._portal_done(r))
                 except Exception as e2:
@@ -1168,18 +1066,16 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             self._sim_progress()
             return
 
-        # ---- Single TXT/MD mode ----
         fmt = self.format_var.get() if hasattr(self, 'format_var') else 'txt'
         out = self.out_var.get().strip()
         if not out:
             messagebox.showerror("Error", "Set output path")
             return
-        # Ensure proper extension
         expected_ext = '.md' if fmt == 'md' else '.txt'
         if not out.lower().endswith(expected_ext):
             out += expected_ext
             self.out_var.set(out)
-        
+
         mode_label = "MD" if fmt == 'md' else "TXT"
         self._start_gen(f"Generating {mode_label}..." if self._lang == 'en' else f"正在生成 {mode_label}...")
 
@@ -1187,12 +1083,10 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             try:
                 if fmt == 'md':
                     text, parsed, skipped, errors, chars = build_markdown_from_files(
-                        self.current_folder, self.file_list,
-                        include_skipped=skip, language=self._lang)
+                        self.current_folder, self.file_list, include_skipped=skip, language=self._lang)
                 else:
                     text, parsed, skipped, errors, chars = build_text_from_files(
-                        self.current_folder, self.file_list,
-                        include_skipped=skip)
+                        self.current_folder, self.file_list, include_skipped=skip)
                 with open(out, 'w', encoding='utf-8') as f:
                     f.write(text)
                 self.root.after(0, lambda: self.prog.config(value=100))
@@ -1227,7 +1121,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         st = (f"{self.tr('gen_done')} {parsed} files" + (f", {skipped} skipped" if skipped else "") +
               (f", {errors} errors" if errors else "") + f" | {chars:,} chars | {human_readable_size(fs)}")
         self.status_var.set(st)
-        # Print hint about --split-chunks for large folders
         print(f"[Hint] Single TXT file generated. If this file is too large for AI context, use:\n"
               f"       python generate.py \"{self.current_folder}\" --split-chunks --chunk-size 500000 -o <output_dir>\n")
         self.footer_var.set(f"OK {os.path.basename(out_path)}")
@@ -1250,13 +1143,7 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.footer_var.set(f"OK {cc} chunks")
         self.dot.delete('all')
         self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
-        msg = (
-            f"Split TXT generated successfully!\n\n"
-            f"Output: {od}\n"
-            f"Chunks: {cc}\n"
-            f"Files: {tf}\n"
-            f"Total chars: {tc:,}\n\n"
-        )
+        msg = f"Split TXT generated successfully!\n\nOutput: {od}\nChunks: {cc}\nFiles: {tf}\nTotal chars: {tc:,}\n\n"
         if messagebox.askyesno("Success", msg + "Open output folder?"):
             try:
                 if sys.platform == 'win32':
@@ -1279,7 +1166,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.dot.create_oval(0, 0, 8, 8, fill=self.COLORS['success'], outline='')
         hi = idx and os.path.exists(idx)
         msg = f"Portal generated!\n\nOutput: {od}\nFiles: {dc}\nSkipped: {sk}\nErrors: {er}\nChars: {tc:,}\n\n"
-
         if hi:
             ask_msg = msg + self.tr('server_ask')
             if messagebox.askyesno("Success", ask_msg):
@@ -1296,7 +1182,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
     # ── File tree search and open ──
 
     def _update_search_hint(self):
-        """Update the search mode hint label."""
         mode = self.search_mode_var.get()
         if self._lang == 'zh':
             hint = '搜索文件名' if mode == 'name' else '搜索代码内容'
@@ -1305,7 +1190,10 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.search_hint_lbl.config(text=hint)
 
     def _build_content_search_index(self):
-        """Build a dict mapping file index -> lowercase content for code searching."""
+        """Build a dict mapping file index -> lowercase content for code searching.
+        
+        Uses instance-level self._content_search_index (not class variable).
+        """
         idx = {}
         for i, f in enumerate(self.file_list):
             if not f['supported']:
@@ -1321,29 +1209,28 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                 pass
         return idx
 
-    _content_search_index = {}  # Class-level cache for content search
-
     def _filter_file_tree(self):
-        """Filter the file tree based on search query."""
+        """Filter the file tree based on search query.
+        
+        Uses instance-level self._content_search_index instead of class variable.
+        Reset on load_folder/clear_folder to prevent cross-folder phantom matches.
+        """
         query = self.search_var.get().strip().lower()
         mode = self.search_mode_var.get()
 
-        # No items in tree
         if not self.tree.get_children():
             return
 
         if not query:
-            # Show all items
             total = 0
             for item in self.tree.get_children():
-                self.tree.item(item, tags=())  # Remove matched tag
+                self.tree.item(item, tags=())
                 total += 1
             self.footer_var.set(f"{total} {self.tr('files')}")
             self.stats_lbl.config(text=f"{len(self.file_list)} {self.tr('files')} | {sum(1 for f in self.file_list if f['supported'])} {self.tr('supported')} | {human_readable_size(self.total_size)}")
             return
 
         if mode == 'code' and not self._content_search_index:
-            # Build content search index in background
             self.status_var.set("Building content search index..." if self._lang == 'en' else "正在构建内容搜索索引...")
             self.root.update_idletasks()
             self._content_search_index = self._build_content_search_index()
@@ -1355,26 +1242,22 @@ class FolderKnowledgeSiteGeneratorForAIUI:
             if not values:
                 continue
             file_name = values[0] if values else ''
-            # Remove icon prefix for matching
             clean_name = file_name.replace('\U0001f4c4', '').replace('\u23ed\ufe0f', '').strip()
 
             if mode == 'name':
-                # Match file name only
                 match = query in clean_name.lower()
             else:
-                # Match file name OR content
                 match = query in clean_name.lower()
                 if not match and i in self._content_search_index:
                     match = query in self._content_search_index[i]
 
             if match:
                 self.tree.item(item, tags=('matched',))
-                self.tree.move(item, '', len(self.tree.get_children()) - len(self.tree.selection()))  # keep order
+                self.tree.move(item, '', len(self.tree.get_children()) - len(self.tree.selection()))
                 matched_count += 1
             else:
                 self.tree.item(item, tags=())
 
-        # Update footer with match count
         self.footer_var.set(f"{matched_count}/{len(self.tree.get_children())} matched")
         if self._lang == 'zh':
             st = f"找到 {matched_count} 个匹配文件"
@@ -1383,7 +1266,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         self.status_var.set(st)
 
     def _on_tree_double_click(self, event):
-        """Handle double-click or Enter on a tree item: open file in system editor."""
         selection = self.tree.selection()
         if not selection:
             return
@@ -1392,10 +1274,8 @@ class FolderKnowledgeSiteGeneratorForAIUI:
         if not values:
             return
         file_name = values[0] if values else ''
-        # Remove icon prefix
         clean_name = file_name.replace('\U0001f4c4', '').replace('\u23ed\ufe0f', '').strip()
 
-        # Find the matching file in file_list
         for f in self.file_list:
             if f['rel_path'] == clean_name:
                 full_path = f['path']
@@ -1414,8 +1294,6 @@ class FolderKnowledgeSiteGeneratorForAIUI:
                         logger.warning("Failed to open file: %s", e)
                         messagebox.showerror("Error", f"Failed to open: {clean_name}\n{e}")
                         return
-
-        # File not found in list (shouldn't happen)
         messagebox.showerror("Error", f"File not found: {clean_name}")
 
     def _gen_err(self, msg):

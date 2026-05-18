@@ -120,9 +120,10 @@ def _collect_files(folder_path: str, max_chars: int | None = None):
     from src.constants import FILTER_DIRS, should_filter_file
     from src.utils import human_readable_size
 
-    entries = []
+    # Collect ALL entries first (without applying max_chars limit)
+    # so that sorting happens before truncation.
+    raw_entries = []
     total_size = 0
-    limit_reached = False
 
     for dirpath, dirnames, filenames in os.walk(folder_path):
         dirnames[:] = [
@@ -137,9 +138,6 @@ def _collect_files(folder_path: str, max_chars: int | None = None):
             if not os.path.isfile(full_path):
                 continue
 
-            if limit_reached:
-                continue
-
             text = _parse_single_file(full_path, rel_path)
             if text is None:
                 continue
@@ -147,31 +145,45 @@ def _collect_files(folder_path: str, max_chars: int | None = None):
             file_size = os.path.getsize(full_path)
             size_hr = human_readable_size(file_size)
 
-            if max_chars is not None and total_size + len(text) > max_chars:
-                # Truncate the current file to fit within global max
-                allowed = max_chars - total_size
-                if allowed <= 0:
-                    limit_reached = True
-                    continue
-                # Find nearest newline boundary for cleaner truncation
-                truncated = text[:allowed]
-                last_newline = truncated.rfind('\n')
-                if last_newline > allowed * 0.5:
-                    truncated = truncated[:last_newline]
-                text = truncated
-                limit_reached = True
-
-            entries.append({
+            raw_entries.append({
                 "rel_path": rel_path,
                 "text": text,
                 "size_hr": size_hr,
             })
             total_size += len(text)
 
-    # Sort by relative path for deterministic output
-    entries.sort(key=lambda e: e["rel_path"].lower())
+    # Sort by relative path BEFORE applying max_chars limit
+    raw_entries.sort(key=lambda e: e["rel_path"].lower())
 
-    return entries, total_size
+    # Now apply max_chars global limit on sorted entries
+    entries = []
+    accumulated = 0
+    limit_reached = False
+
+    for entry in raw_entries:
+        if limit_reached:
+            break
+        text = entry["text"]
+        if max_chars is not None and accumulated + len(text) > max_chars:
+            allowed = max_chars - accumulated
+            if allowed <= 0:
+                break
+            # Find nearest newline boundary for cleaner truncation
+            truncated = text[:allowed]
+            last_newline = truncated.rfind('\n')
+            if last_newline > allowed * 0.5:
+                truncated = truncated[:last_newline]
+            text = truncated
+            limit_reached = True
+
+        entries.append({
+            "rel_path": entry["rel_path"],
+            "text": text,
+            "size_hr": entry["size_hr"],
+        })
+        accumulated += len(text)
+
+    return entries, accumulated
 
 
 def chunk_files(
@@ -326,7 +338,7 @@ def generate_index_html(
 {file_list_html}
                 </ul>
                 <p class="chunk-filename">
-                    📄 <code>{escape(folder_name)}_part_{chunk.index + 1:03d}.txt</code>
+                    📄 <a href="{escape(folder_name)}_part_{chunk.index + 1:03d}.txt" style="color:#1a73e8;text-decoration:none;" target="_blank"><code>{escape(folder_name)}_part_{chunk.index + 1:03d}.txt</code></a> <span style="font-size:0.8em;color:#888;">(click to open)</span>
                 </p>
             </div>
         </div>""")

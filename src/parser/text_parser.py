@@ -54,8 +54,9 @@ def _try_encodings(filepath: str, encodings: list) -> str:
         except Exception as e:
             last_error = e
             continue
+    # Fix: UnicodeDecodeError requires 5 args; use RuntimeError for string-only message
     if last_error is None:
-        raise UnicodeDecodeError("utf-8", b"", 0, 0, "All encodings failed")
+        raise RuntimeError("All encodings failed")
     raise last_error
 
 

@@ -721,6 +721,43 @@ function setSearchMode(mode) {
   });
 })();
 
+// ── jumpToFile function (used by single-page mode file tree links) ──
+// File names are base64-encoded in b64 format.
+// The function scrolls to the matching doc-block in the file contents section.
+function jumpToFile(b64) {
+  let filename;
+  try {
+    filename = atob(b64);
+  } catch(e) {
+    console.error('Invalid base64 filename:', b64);
+    return;
+  }
+  // Find the doc-block with matching data-filename-b64 attribute
+  const blocks = document.querySelectorAll('.doc-block');
+  for (const block of blocks) {
+    const blockB64 = block.getAttribute('data-filename-b64');
+    if (blockB64 === b64) {
+      block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Highlight briefly
+      block.style.transition = 'background 0.5s';
+      block.style.background = '#fff3cd';
+      setTimeout(() => {
+        block.style.background = '';
+      }, 1500);
+      return;
+    }
+  }
+  // If not found, try matching by decoded filename
+  for (const block of blocks) {
+    const title = block.querySelector('.file-name');
+    if (title && (title.textContent === filename || title.textContent.endsWith(filename))) {
+      block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+  }
+  console.warn('Could not find file block for:', filename);
+}
+
 // ── Copy file content function (consistent with subpage.html's copyCode) ──
 function copyCode(btn) {
   // Find the doc-content within the same doc-block as the clicked button

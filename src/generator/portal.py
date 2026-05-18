@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 
 # Default max characters per file before truncation.
 # Override via generate_portal(..., max_chars_per_file=...)
-_DEFAULT_MAX_CHARS_PER_FILE = 50_000
+# Increased from 50,000 to 200,000 to prevent silent truncation for larger files.
+# For knowledge base completeness, use --max-chars-per-file 0 for no limit.
+_DEFAULT_MAX_CHARS_PER_FILE = 200_000
 
 
 # ============================================================
@@ -390,7 +392,9 @@ def generate_portal(
         print(f"  [Error Summary] {error_count} file(s) failed to parse")
 
     parsed_paths = {d["file"] for d in docs_meta if not d.get("skipped")}
-    file_tree_html = build_file_tree_html(folder_path, parsed_files=parsed_paths) if include_skipped else ""
+    # When include_skipped=False, still include the file tree but mark unparsed files as greyed-out.
+    # The build_file_tree_html function already handles this via the parsed_files param.
+    file_tree_html = build_file_tree_html(folder_path, parsed_files=parsed_paths)
     file_contents_html = build_file_content_blocks(docs_texts)
 
     if docs_meta or file_tree_html:
@@ -613,7 +617,9 @@ def generate_portal_split(
     docs_texts.sort(key=lambda d: d.get("title", "").lower())
 
     # ── Build index page ──
-    file_tree_html = build_file_tree_split_html(folder_path, docs_texts) if include_skipped else ""
+    # When include_skipped=False, still include the file tree but mark unparsed files as greyed-out.
+    # The build_file_tree_split_html function handles this via parsed_docs param.
+    file_tree_html = build_file_tree_split_html(folder_path, docs_texts)
 
     # Build search index JSON
     search_index_json = build_search_index_json(docs_texts)
